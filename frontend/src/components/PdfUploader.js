@@ -89,9 +89,9 @@ const DownloadButton = styled.button`
   }
 `;
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://your-backend-url.com';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://pdf-epub-converter-backend.onrender.com';
 
-const PdfUploader = ({ onEpubGenerated }) => {
+const PdfUploader = ({ onEpubGenerated, onBack }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [conversionStatus, setConversionStatus] = useState('');
@@ -126,21 +126,39 @@ const PdfUploader = ({ onEpubGenerated }) => {
         setConversionStatus('Generating EPUB...');
         setProgress(80);
 
-        // Poll for completion
-        const pollStatus = async (conversionId) => {
-          const statusResponse = await fetch(`${API_BASE_URL}/api/status/${conversionId}`);
-          const statusData = await statusResponse.json();
-
-          if (statusData.status === 'completed') {
-            setProgress(100);
-            setConversionStatus('Conversion complete!');
-            setDownloadUrl(`${API_BASE_URL}${statusData.download_url}`);
+        // Handle direct download URL from conversion response
+        if (result.download_url) {
+          setProgress(100);
+          setConversionStatus('Conversion complete!');
+          
+          // Check if it's a direct Cloudinary URL or needs API prefix
+          if (result.download_url.startsWith('https://')) {
+            setDownloadUrl(result.download_url);
           } else {
-            setTimeout(() => pollStatus(conversionId), 1000);
+            setDownloadUrl(`${API_BASE_URL}${result.download_url}`);
           }
-        };
+        } else {
+          // Fallback to polling if no direct URL provided
+          const pollStatus = async (conversionId) => {
+            const statusResponse = await fetch(`${API_BASE_URL}/api/status/${conversionId}`);
+            const statusData = await statusResponse.json();
 
-        await pollStatus(result.conversion_id);
+            if (statusData.status === 'completed') {
+              setProgress(100);
+              setConversionStatus('Conversion complete!');
+              
+              if (statusData.download_url.startsWith('https://')) {
+                setDownloadUrl(statusData.download_url);
+              } else {
+                setDownloadUrl(`${API_BASE_URL}${statusData.download_url}`);
+              }
+            } else {
+              setTimeout(() => pollStatus(conversionId), 1000);
+            }
+          };
+
+          await pollStatus(result.conversion_id);
+        }
       } else {
         throw new Error(result.error || 'Conversion failed');
       }
@@ -181,7 +199,14 @@ const PdfUploader = ({ onEpubGenerated }) => {
 
   const handleDownload = useCallback(() => {
     if (downloadUrl) {
-      window.open(downloadUrl, '_blank');
+      // Handle both Cloudinary URLs and local API URLs
+      if (downloadUrl.startsWith('https://res.cloudinary.com')) {
+        // Direct Cloudinary URL - download directly
+        window.open(downloadUrl, '_blank');
+      } else {
+        // Local API URL - use original method
+        window.open(downloadUrl, '_blank');
+      }
     }
   }, [downloadUrl]);
 

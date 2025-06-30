@@ -88,10 +88,10 @@ function App() {
       <AppContainer>
         <Header>
           <Logo>
-            <i className="fas fa-book-open"></i>
-            EPUB Reader
+            <i className={showPdfUploader ? "fas fa-file-pdf" : "fas fa-book-open"}></i>
+            {showPdfUploader ? "PDF to EPUB Converter" : "EPUB Reader"}
           </Logo>
-          {isReading && (
+          {(isReading || showPdfUploader) && (
             <button 
               onClick={handleBackToLibrary}
               style={{
@@ -106,14 +106,60 @@ function App() {
               onMouseOver={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.3)'}
               onMouseOut={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.2)'}
             >
-              <i className="fas fa-arrow-left"></i> Back to Library
+              <i className="fas fa-arrow-left"></i> Back to Home
             </button>
           )}
         </Header>
         
         <MainContent>
-          {!isReading ? (
-            <FileUploader onFileSelect={handleFileSelect} />
+          {!isReading && !showPdfUploader ? (
+            <div>
+              <div style={{ 
+                display: 'flex', 
+                gap: '1rem', 
+                marginBottom: '2rem',
+                justifyContent: 'center'
+              }}>
+                <button
+                  onClick={handleShowPdfUploader}
+                  style={{
+                    background: 'linear-gradient(135deg, #ffd700, #ffed4e)',
+                    color: '#333',
+                    border: 'none',
+                    padding: '1rem 2rem',
+                    borderRadius: '0.5rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s ease'
+                  }}
+                  onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                  onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                >
+                  <i className="fas fa-file-pdf" style={{ marginRight: '0.5rem' }}></i>
+                  Convert PDF to EPUB
+                </button>
+                <button
+                  onClick={handleShowEpubUploader}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    color: 'white',
+                    padding: '1rem 2rem',
+                    borderRadius: '0.5rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseOver={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.3)'}
+                  onMouseOut={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.2)'}
+                >
+                  <i className="fas fa-book-open" style={{ marginRight: '0.5rem' }}></i>
+                  Read EPUB File
+                </button>
+              </div>
+              <FileUploader onFileSelect={handleFileSelect} />
+            </div>
+          ) : showPdfUploader ? (
+            <PdfUploader onBack={handleBackToLibrary} />
           ) : (
             <EpubReader epubFile={epubFile} />
           )}
