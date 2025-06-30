@@ -3,6 +3,7 @@ import styled, { createGlobalStyle } from 'styled-components';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import EpubReader from './components/EpubReader';
 import FileUploader from './components/FileUploader';
+import PdfUploader from './components/PdfUploader';
 import './App.css';
 
 const GlobalStyle = createGlobalStyle`
@@ -60,6 +61,7 @@ const MainContent = styled.main`
 function App() {
   const [epubFile, setEpubFile] = useState(null);
   const [isReading, setIsReading] = useState(false);
+  const [showPdfUploader, setShowPdfUploader] = useState(false);
 
   const handleFileSelect = useCallback((file) => {
     setEpubFile(file);
@@ -69,6 +71,15 @@ function App() {
   const handleBackToLibrary = useCallback(() => {
     setEpubFile(null);
     setIsReading(false);
+    setShowPdfUploader(false);
+  }, []);
+
+  const handleShowPdfUploader = useCallback(() => {
+    setShowPdfUploader(true);
+  }, []);
+
+  const handleShowEpubUploader = useCallback(() => {
+    setShowPdfUploader(false);
   }, []);
 
   return (
