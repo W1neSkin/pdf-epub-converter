@@ -2,6 +2,11 @@
 
 A comprehensive PDF to EPUB conversion system with a modern React frontend. Converts PDFs to interactive EPUB files with selectable text overlays that maintain the visual appearance of the original PDF while providing full text selection and copying capabilities.
 
+## 🌐 Live Demo
+**Try it now:** https://w1neskin.github.io/pdf-epub-converter
+
+Upload an EPUB file and experience the interactive text selection features!
+
 ## 🌟 Features
 
 ### 🔄 PDF Processing Engine
