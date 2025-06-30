@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 import asyncio
 import logging
 from alternative_parser import AlternativePDFParser
-from html_generator import HTMLGenerator
+from html_generator import HTMLPageGenerator
 from epub_generator import EPUBGenerator
 from storage import storage
 
@@ -107,7 +107,7 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
             results = processor.parse_pdf(pdf_path, output_dir)
             
             # Generate HTML pages
-            html_gen = HTMLGenerator()
+            html_gen = HTMLPageGenerator()
             html_pages = html_gen.generate_html_pages(results, output_dir)
             
             # Generate EPUB

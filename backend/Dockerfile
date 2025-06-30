@@ -17,6 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all backend files
 COPY . .
 
-# Backend is now just for PDF processing - no server needed
-# Container can be used for running Python scripts manually or via API calls
-CMD ["tail", "-f", "/dev/null"] 
+# Expose port 8000 for FastAPI
+EXPOSE 8000
+
+# Run FastAPI server
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"] 
