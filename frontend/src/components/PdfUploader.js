@@ -89,7 +89,7 @@ const DownloadButton = styled.button`
   }
 `;
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://pdf-epub-converter-backend.onrender.com';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://pdf-epub-converter-api.onrender.com';
 
 const PdfUploader = ({ onEpubGenerated, onBack }) => {
   const [isDragOver, setIsDragOver] = useState(false);

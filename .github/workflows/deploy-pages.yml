@@ -47,7 +47,7 @@ jobs:
         CI: false
         GENERATE_SOURCEMAP: false
         ESLINT_NO_DEV_ERRORS: true
-        REACT_APP_API_URL: https://pdf-epub-converter-backend.onrender.com
+        REACT_APP_API_URL: https://pdf-epub-converter-api.onrender.com
         
     - name: Setup Pages
       uses: actions/configure-pages@v4
