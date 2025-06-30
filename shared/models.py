@@ -256,7 +256,7 @@ class PaginationParams(BaseModel):
     page: int = Field(1, ge=1)
     limit: int = Field(20, ge=1, le=100)
     sort_by: Optional[str] = "created_at"
-    sort_order: Optional[str] = Field("desc", regex="^(asc|desc)$")
+    sort_order: Optional[str] = Field("desc", pattern="^(asc|desc)$")
 
 class PaginatedResponse(BaseResponse):
     """Paginated response"""
