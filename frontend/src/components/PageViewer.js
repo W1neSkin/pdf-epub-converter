@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import styled from 'styled-components';
 
 const ViewerContainer = styled.div`
@@ -231,13 +231,7 @@ const PageViewer = ({ pages, currentPageIndex, epubData, onPageChange }) => {
   const [processedContent, setProcessedContent] = useState('');
   const containerRef = useRef();
 
-  useEffect(() => {
-    if (pages && pages[currentPageIndex]) {
-      processPageContent(pages[currentPageIndex]);
-    }
-  }, [pages, currentPageIndex, epubData]);
-
-  const processPageContent = async (page) => {
+  const processPageContent = useCallback(async (page) => {
     if (!page || !page.content) {
       setProcessedContent('<div>No content available</div>');
       return;
@@ -293,19 +287,25 @@ const PageViewer = ({ pages, currentPageIndex, epubData, onPageChange }) => {
       console.error('Error processing page content:', err);
       setProcessedContent('<div>Error loading page content</div>');
     }
-  };
+  }, [epubData]);
 
-  const handlePreviousPage = () => {
+  useEffect(() => {
+    if (pages && pages[currentPageIndex]) {
+      processPageContent(pages[currentPageIndex]);
+    }
+  }, [pages, currentPageIndex, processPageContent]);
+
+  const handlePreviousPage = useCallback(() => {
     if (currentPageIndex > 0) {
       onPageChange(currentPageIndex - 1);
     }
-  };
+  }, [currentPageIndex, onPageChange]);
 
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(() => {
     if (currentPageIndex < pages.length - 1) {
       onPageChange(currentPageIndex + 1);
     }
-  };
+  }, [currentPageIndex, pages.length, onPageChange]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -319,7 +319,7 @@ const PageViewer = ({ pages, currentPageIndex, epubData, onPageChange }) => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentPageIndex, pages.length]);
+  }, [handlePreviousPage, handleNextPage]);
 
   if (!pages || pages.length === 0) {
     return (

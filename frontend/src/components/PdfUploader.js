@@ -91,91 +91,130 @@ const DownloadButton = styled.button`
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://pdf-converter-api-gateway.onrender.com';
 
-const PdfUploader = ({ onEpubGenerated, onBack }) => {
+const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [conversionStatus, setConversionStatus] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [progress, setProgress] = useState(0);
 
-  const handleFileUpload = useCallback(async (file) => {
+  const uploadFile = useCallback(async (file) => {
     if (!file || !file.type === 'application/pdf') {
       alert('Please select a valid PDF file');
       return;
     }
 
+    if (!user?.token) {
+      alert('Authentication required. Please log in first.');
+      return;
+    }
+
     setIsConverting(true);
-    setConversionStatus('Uploading PDF...');
-    setProgress(20);
+    setConversionStatus('Preparing upload...');
+    setProgress(10);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
 
+      setConversionStatus('Uploading PDF...');
+      setProgress(20);
+
+      if (onEpubGenerated) {
+        onEpubGenerated(null);
+      }
+
       setConversionStatus('Processing PDF...');
       setProgress(40);
 
+      const headers = {};
+      if (user?.token) {
+        headers['Authorization'] = `Bearer ${user.token}`;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/convert`, {
         method: 'POST',
+        headers,
         body: formData,
       });
 
-      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
 
+      const result = await response.json();
+      
       if (result.success) {
         setConversionStatus('Generating EPUB...');
-        setProgress(80);
+        setProgress(70);
 
-        // Handle direct download URL from conversion response
         if (result.download_url) {
+          // Direct download URL provided
+          setDownloadUrl(result.download_url);
+          setConversionStatus('Conversion completed successfully!');
           setProgress(100);
-          setConversionStatus('Conversion complete!');
           
-          // Check if it's a direct Cloudinary URL or needs API prefix
-          if (result.download_url.startsWith('https://')) {
-            setDownloadUrl(result.download_url);
-          } else {
-            setDownloadUrl(`${API_BASE_URL}${result.download_url}`);
+          if (onEpubGenerated) {
+            onEpubGenerated(result.download_url);
           }
         } else {
           // Fallback to polling if no direct URL provided
           const pollStatus = async (conversionId) => {
-            const statusResponse = await fetch(`${API_BASE_URL}/api/status/${conversionId}`);
+            const statusHeaders = {};
+            if (user?.token) {
+              statusHeaders['Authorization'] = `Bearer ${user.token}`;
+            }
+            
+            const statusResponse = await fetch(`${API_BASE_URL}/api/status/${conversionId}`, {
+              headers: statusHeaders
+            });
             const statusData = await statusResponse.json();
 
-            if (statusData.status === 'completed') {
+            if (statusData.status === 'completed' && statusData.download_url) {
+              setDownloadUrl(statusData.download_url);
+              setConversionStatus('Conversion completed successfully!');
               setProgress(100);
-              setConversionStatus('Conversion complete!');
               
-              if (statusData.download_url.startsWith('https://')) {
-                setDownloadUrl(statusData.download_url);
-              } else {
-                setDownloadUrl(`${API_BASE_URL}${statusData.download_url}`);
+              if (onEpubGenerated) {
+                onEpubGenerated(statusData.download_url);
               }
+            } else if (statusData.status === 'failed') {
+              throw new Error('Conversion failed on server');
             } else {
-              setTimeout(() => pollStatus(conversionId), 1000);
+              // Still processing, poll again
+              setTimeout(() => pollStatus(conversionId), 2000);
             }
           };
 
-          await pollStatus(result.conversion_id);
+          if (result.conversion_id) {
+            pollStatus(result.conversion_id);
+          } else {
+            throw new Error('No conversion ID provided');
+          }
         }
       } else {
-        throw new Error(result.error || 'Conversion failed');
+        throw new Error(result.message || 'Conversion failed');
       }
     } catch (error) {
+      console.error('Upload error:', error);
       setConversionStatus(`Error: ${error.message}`);
       setProgress(0);
+      
+      setTimeout(() => {
+        setIsConverting(false);
+        setConversionStatus('');
+      }, 3000);
     }
-  }, []);
+  }, [user, onEpubGenerated]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragOver(false);
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleFileUpload(files[0]);
+      uploadFile(files[0]);
     }
-  }, [handleFileUpload]);
+  }, [uploadFile]);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -193,9 +232,9 @@ const PdfUploader = ({ onEpubGenerated, onBack }) => {
   const handleFileInput = useCallback((e) => {
     const files = e.target.files;
     if (files.length > 0) {
-      handleFileUpload(files[0]);
+      uploadFile(files[0]);
     }
-  }, [handleFileUpload]);
+  }, [uploadFile]);
 
   const handleDownload = useCallback(() => {
     if (downloadUrl) {

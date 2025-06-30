@@ -57,6 +57,10 @@ Service ice   Service
 
 ### 🎨 React Frontend
 - **Modern UI**: Beautiful, responsive interface with gradient design
+- **User Management**: Complete authentication system with login/registration
+- **Personal Library**: Save and manage your converted books with statistics
+- **User Dashboard**: Centralized view of conversions, storage usage, and account
+- **Secure Access**: All operations require user authentication for security
 - **Drag & drop**: Easy EPUB file uploading
 - **Real-time rendering**: Instant EPUB viewing and navigation
 - **Mobile responsive**: Works perfectly on all devices
@@ -66,10 +70,13 @@ Service ice   Service
 ### **🌟 Production (Microservices)**
 **✅ Ready to use - No setup required!**
 
-1. **Visit**: https://w1neskin.github.io/pdf-epub-converter  
-2. **Convert PDFs**: Upload and convert through the web interface
-3. **Register**: Create an account for personal library features
-4. **Manage**: View your conversion history and download previous files
+**🔐 Authentication Required:**
+1. **Visit**: https://w1neskin.github.io/pdf-epub-converter
+2. **Sign Up/Login**: Create an account or log in to access all features
+3. **Dashboard**: Access your personal library and conversion statistics
+4. **Convert PDFs**: Upload and convert with automatic library saving
+5. **Read EPUBs**: Upload EPUB files to read with full functionality
+6. **Manage**: Download, organize, and delete your converted books
 
 **📖 [Complete deployment guide](./docs/render-deploy.md)** to deploy your own instance.
 
