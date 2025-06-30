@@ -10,7 +10,7 @@ import shutil
 from typing import Dict, Any, Optional
 import asyncio
 import logging
-from alternative_parser import PDFProcessor
+from alternative_parser import AlternativePDFParser
 from html_generator import HTMLGenerator
 from epub_generator import EPUBGenerator
 from storage import storage
@@ -103,8 +103,8 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
         loop = asyncio.get_event_loop()
         
         def process_pdf_sync():
-            processor = PDFProcessor()
-            results = processor.process_pdf(pdf_path, output_dir)
+            processor = AlternativePDFParser()
+            results = processor.parse_pdf(pdf_path, output_dir)
             
             # Generate HTML pages
             html_gen = HTMLGenerator()
