@@ -8,6 +8,10 @@ services:
     region: oregon
     branch: master
     healthCheckPath: /health
+    buildFilter:
+      paths:
+        - services/library-service/**
+        - shared/**
     envVars:
       - key: SUPABASE_URL
         sync: false
@@ -17,9 +21,9 @@ services:
         sync: false
       - key: JWT_SECRET_KEY
         sync: false
+      - key: PORT
+        value: "8002"
       - key: DEBUG
         value: "false"
       - key: LOG_LEVEL
-        value: "INFO"
-      - key: PORT
-        value: "8002" 
+        value: "INFO" 

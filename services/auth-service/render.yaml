@@ -1,16 +1,27 @@
 services:
   - type: web
-    name: pdf-auth-service
-    env: docker
+    name: pdf-converter-auth-service
+    runtime: docker
     dockerfilePath: ./services/auth-service/Dockerfile
     dockerContext: .
+    plan: free
+    region: oregon
     branch: master
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - services/auth-service/**
+        - shared/**
     envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
       - key: PORT
-        value: 8001
-      - key: ENVIRONMENT
-        value: production
+        value: "8001"
       - key: DEBUG
-        value: false
+        value: "false"
       - key: LOG_LEVEL
-        value: INFO 
+        value: "INFO" 

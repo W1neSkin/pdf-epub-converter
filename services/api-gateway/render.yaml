@@ -1,16 +1,29 @@
 services:
   - type: web
-    name: pdf-api-gateway
-    env: docker
+    name: pdf-converter-api-gateway
+    runtime: docker
     dockerfilePath: ./services/api-gateway/Dockerfile
     dockerContext: .
+    plan: free
+    region: oregon
     branch: master
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - services/api-gateway/**
+        - shared/**
     envVars:
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: AUTH_SERVICE_URL
+        value: https://pdf-converter-auth-service.onrender.com
+      - key: CONVERTER_SERVICE_URL
+        value: https://pdf-epub-converter-api.onrender.com
+      - key: LIBRARY_SERVICE_URL
+        value: https://pdf-converter-library-service.onrender.com
       - key: PORT
-        value: 8080
-      - key: ENVIRONMENT
-        value: production
+        value: "8080"
       - key: DEBUG
-        value: false
+        value: "false"
       - key: LOG_LEVEL
-        value: INFO 
+        value: "INFO" 
