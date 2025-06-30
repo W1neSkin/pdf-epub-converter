@@ -106,20 +106,46 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
             processor = AlternativePDFParser()
             results = processor.parse_pdf(pdf_path, output_dir)
             
-            # Generate EPUB directly from images (simplified approach)
-            epub_gen = EPUBGenerator()
-            image_files = [page.get('image_path') for page in results.get('pages', []) if page.get('image_path')]
+            # Create simple HTML files for each page
+            html_files = []
+            for page_data in results.get('pages', []):
+                if 'image_path' in page_data:
+                    page_num = page_data['page_number']
+                    image_filename = os.path.basename(page_data['image_path'])
+                    
+                    # Create simple HTML content
+                    html_content = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Page {page_num}</title>
+</head>
+<body>
+    <h1>Page {page_num}</h1>
+    <img src="images/{image_filename}" alt="Page {page_num}" style="max-width: 100%; height: auto;"/>
+    <p>Text content: {page_data.get('text', 'No text extracted')[:200]}...</p>
+</body>
+</html>'''
+                    
+                    # Save HTML file
+                    html_filename = f"page_{page_num:03d}.html"
+                    html_path = os.path.join(output_dir, html_filename)
+                    with open(html_path, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    html_files.append(html_path)
             
-            if image_files:
+            # Generate EPUB from HTML files
+            if html_files:
+                epub_gen = EPUBGenerator()
                 epub_filename = f"{conversion_id}.epub"
                 epub_path = epub_gen.generate_epub(
-                    html_dir=output_dir,  # Will create HTML files on the fly
-                    image_dir=output_dir,  # Images are in the same directory
+                    html_dir=output_dir,
+                    image_dir=output_dir,
                     output_filename=os.path.join(output_dir, epub_filename),
                     title=f"Converted PDF - {file.filename}"
                 )
             else:
-                raise Exception("No images generated from PDF")
+                raise Exception("No pages generated from PDF")
             
             return results
         
