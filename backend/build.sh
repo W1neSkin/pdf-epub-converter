@@ -11,4 +11,5 @@ echo "Creating necessary directories..."
 mkdir -p /tmp/uploads
 mkdir -p /tmp/outputs
 
-echo "Build completed successfully!" 
+echo "Build completed successfully!"
+echo "Python version: $(python --version)" 
