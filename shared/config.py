@@ -5,7 +5,7 @@ Used across all services: Gateway, Auth, Converter, Library
 
 import os
 from typing import Optional
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Shared settings across all microservices"""
