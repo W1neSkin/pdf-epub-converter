@@ -118,10 +118,10 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Page {page_num}</title>
+    <title>PDF Page {page_num}</title>
 </head>
 <body>
-    <h1>Page {page_num}</h1>
+    <h1>PDF Page {page_num}</h1>
     <img src="images/{image_filename}" alt="Page {page_num}" style="max-width: 100%; height: auto;"/>
     <p>Text content: {page_data.get('text', 'No text extracted')[:200]}...</p>
 </body>
@@ -133,6 +133,10 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
                     with open(html_path, 'w', encoding='utf-8') as f:
                         f.write(html_content)
                     html_files.append(html_path)
+                    print(f"📄 Created HTML file: {html_path}")
+            
+            print(f"📁 Output directory contents: {os.listdir(output_dir)}")
+            print(f"🔢 Total HTML files created: {len(html_files)}")
             
             # Generate EPUB from HTML files
             if html_files:
@@ -144,6 +148,7 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
                     output_filename=os.path.join(output_dir, epub_filename),
                     title=f"Converted PDF - {file.filename}"
                 )
+                print(f"✅ EPUB generated successfully: {epub_path}")
             else:
                 raise Exception("No pages generated from PDF")
             
