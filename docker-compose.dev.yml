@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/pdf_parser_env  # Exclude virtual environment
+    environment:
+      - NODE_ENV=development
+    container_name: pdf-epub-backend-dev
+    restart: unless-stopped
+    networks:
+      - pdf-epub-network
+    command: ["node", "server.js"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Exclude node_modules
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:3001
+      - CHOKIDAR_USEPOLLING=true
+    container_name: pdf-epub-frontend-dev
+    restart: unless-stopped
+    networks:
+      - pdf-epub-network
+    depends_on:
+      - backend
+    stdin_open: true
+    tty: true
+
+networks:
+  pdf-epub-network:
+    driver: bridge 

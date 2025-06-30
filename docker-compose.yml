@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+      - /app/pdf_parser_env  # Exclude virtual environment from volume mount
+    environment:
+      - PYTHONPATH=/app
+    container_name: pdf-epub-backend
+    restart: unless-stopped
+    networks:
+      - pdf-epub-network
+    # Backend is now just for PDF processing, no server
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:3000
+    container_name: pdf-epub-frontend
+    restart: unless-stopped
+    networks:
+      - pdf-epub-network
+    # Frontend now serves everything including sample EPUB
+
+networks:
+  pdf-epub-network:
+    driver: bridge
+
+volumes:
+  backend_data:
+  frontend_data: 

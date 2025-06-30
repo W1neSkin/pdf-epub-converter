@@ -1,0 +1,7 @@
+.git
+.gitignore
+README.md
+.env
+docker-compose.override.yml
+.DS_Store
+Thumbs.db 

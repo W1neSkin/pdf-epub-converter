@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selection Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        
+        .page-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            background: white;
+        }
+        
+        .page-image {
+            width: 100%;
+            height: 100%;
+            display: block;
+            user-select: none;
+            background: #fafafa;
+        }
+        
+        .text-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+        
+        .text-element {
+            position: absolute;
+            cursor: text;
+            user-select: text;
+            pointer-events: auto;
+            color: transparent;
+            z-index: 10;
+            padding: 2px;
+            margin: 0;
+            line-height: 1;
+            white-space: nowrap;
+            background-color: transparent;
+            font-family: 'Arial', sans-serif;
+            border: none;
+            min-width: 20px;
+            min-height: 15px;
+        }
+        
+        .text-element:hover {
+            background-color: rgba(255, 255, 0, 0.3) !important;
+            border: 1px solid red !important;
+        }
+        
+        .text-element.selected {
+            background-color: rgba(0, 123, 255, 0.3) !important;
+            color: transparent;
+            border: 2px solid blue !important;
+            z-index: 20;
+        }
+        
+        .debug-info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: black;
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-info" id="debugInfo">
+        Mouse: (0, 0)<br>
+        Target: none<br>
+        Selected: 0
+    </div>
+    
+    <h1>Text Selection Test</h1>
+    <p>Try clicking on the words below or dragging to select multiple words:</p>
+    
+    <div class="page-container" id="pageContainer">
+        <div class="page-image"></div>
+        <div class="text-layer">
+            <span class="text-element" 
+                  style="left: 10%; top: 10%; width: 15%; height: 5%; font-size: 24px;"
+                  data-text="Sample">Sample</span>
+            <span class="text-element" 
+                  style="left: 30%; top: 10%; width: 10%; height: 5%; font-size: 24px;"
+                  data-text="PDF">PDF</span>
+            <span class="text-element" 
+                  style="left: 10%; top: 20%; width: 12%; height: 4%; font-size: 18px;"
+                  data-text="This">This</span>
+            <span class="text-element" 
+                  style="left: 25%; top: 20%; width: 8%; height: 4%; font-size: 18px;"
+                  data-text="is">is</span>
+            <span class="text-element" 
+                  style="left: 35%; top: 20%; width: 8%; height: 4%; font-size: 18px;"
+                  data-text="a">a</span>
+            <span class="text-element" 
+                  style="left: 45%; top: 20%; width: 10%; height: 4%; font-size: 18px;"
+                  data-text="test">test</span>
+        </div>
+    </div>
+
+    <script>
+        let selectedElements = new Set();
+        let isSelecting = false;
+        let startX, startY;
+        let selectionBox;
+        const debugInfo = document.getElementById('debugInfo');
+        
+        // Debug mouse tracking
+        document.addEventListener('mousemove', function(e) {
+            debugInfo.innerHTML = `
+                Mouse: (${e.clientX}, ${e.clientY})<br>
+                Target: ${e.target.className || e.target.tagName}<br>
+                Selected: ${selectedElements.size}<br>
+                IsSelecting: ${isSelecting}
+            `;
+        });
+        
+        // Clear all selections
+        function clearSelection() {
+            selectedElements.forEach(element => {
+                element.classList.remove('selected');
+            });
+            selectedElements.clear();
+        }
+        
+        // Click selection
+        document.addEventListener('click', function(e) {
+            console.log('Click event:', e.target.className, e.target.tagName);
+            
+            if (e.target.classList.contains('text-element')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('Clicked text element:', e.target.getAttribute('data-text'));
+                
+                if (!e.ctrlKey && !e.metaKey) {
+                    clearSelection();
+                }
+                
+                if (selectedElements.has(e.target)) {
+                    e.target.classList.remove('selected');
+                    selectedElements.delete(e.target);
+                } else {
+                    e.target.classList.add('selected');
+                    selectedElements.add(e.target);
+                }
+            } else {
+                console.log('Clicked outside text element');
+                if (!e.target.closest('.debug-info')) {
+                    clearSelection();
+                }
+            }
+        });
+        
+        // Drag selection
+        document.addEventListener('mousedown', function(e) {
+            console.log('Mousedown:', e.target.className);
+            
+            if (e.target.classList.contains('text-layer') || 
+                e.target.classList.contains('page-image') || 
+                e.target.classList.contains('page-container')) {
+                
+                isSelecting = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                
+                if (!e.ctrlKey && !e.metaKey) {
+                    clearSelection();
+                }
+                
+                e.preventDefault();
+                console.log('Started selection');
+            }
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (isSelecting) {
+                const currentX = e.clientX;
+                const currentY = e.clientY;
+                const distance = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
+                
+                if (distance > 5) {
+                    if (!selectionBox) {
+                        selectionBox = document.createElement('div');
+                        selectionBox.style.position = 'fixed';
+                        selectionBox.style.border = '2px solid #007bff';
+                        selectionBox.style.backgroundColor = 'rgba(0, 123, 255, 0.1)';
+                        selectionBox.style.pointerEvents = 'none';
+                        selectionBox.style.zIndex = '1000';
+                        document.body.appendChild(selectionBox);
+                        console.log('Created selection box');
+                    }
+                    
+                    const left = Math.min(startX, currentX);
+                    const top = Math.min(startY, currentY);
+                    const width = Math.abs(currentX - startX);
+                    const height = Math.abs(currentY - startY);
+                    
+                    selectionBox.style.left = left + 'px';
+                    selectionBox.style.top = top + 'px';
+                    selectionBox.style.width = width + 'px';
+                    selectionBox.style.height = height + 'px';
+                    
+                    // Select overlapping elements
+                    const rect = selectionBox.getBoundingClientRect();
+                    const elements = document.querySelectorAll('.text-element');
+                    
+                    elements.forEach(element => {
+                        const elementRect = element.getBoundingClientRect();
+                        const isInSelection = elementRect.left < rect.right && 
+                                             elementRect.right > rect.left && 
+                                             elementRect.top < rect.bottom && 
+                                             elementRect.bottom > rect.top;
+                        
+                        if (isInSelection && !selectedElements.has(element)) {
+                            element.classList.add('selected');
+                            selectedElements.add(element);
+                        } else if (!isInSelection && selectedElements.has(element) && !e.ctrlKey && !e.metaKey) {
+                            element.classList.remove('selected');
+                            selectedElements.delete(element);
+                        }
+                    });
+                }
+            }
+        });
+        
+        document.addEventListener('mouseup', function(e) {
+            if (isSelecting) {
+                console.log('Selection ended, selected:', selectedElements.size);
+                
+                if (selectionBox) {
+                    document.body.removeChild(selectionBox);
+                    selectionBox = null;
+                }
+                
+                isSelecting = false;
+            }
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'c' && selectedElements.size > 0) {
+                    e.preventDefault();
+                    const texts = Array.from(selectedElements)
+                        .map(el => el.getAttribute('data-text'))
+                        .join(' ');
+                    
+                    navigator.clipboard.writeText(texts).then(() => {
+                        alert('Copied: ' + texts);
+                    });
+                }
+            } else if (e.key === 'Escape') {
+                clearSelection();
+            }
+        });
+    </script>
+</body>
+</html> 
