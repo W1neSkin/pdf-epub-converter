@@ -106,18 +106,20 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
             processor = AlternativePDFParser()
             results = processor.parse_pdf(pdf_path, output_dir)
             
-            # Generate HTML pages
-            html_gen = HTMLPageGenerator()
-            html_pages = html_gen.generate_html_pages(results, output_dir)
-            
-            # Generate EPUB
+            # Generate EPUB directly from images (simplified approach)
             epub_gen = EPUBGenerator()
-            epub_path = epub_gen.create_epub(
-                results, 
-                html_pages, 
-                output_dir,
-                f"{conversion_id}.epub"
-            )
+            image_files = [page.get('image_path') for page in results.get('pages', []) if page.get('image_path')]
+            
+            if image_files:
+                epub_filename = f"{conversion_id}.epub"
+                epub_path = epub_gen.generate_epub(
+                    html_dir=output_dir,  # Will create HTML files on the fly
+                    image_dir=output_dir,  # Images are in the same directory
+                    output_filename=os.path.join(output_dir, epub_filename),
+                    title=f"Converted PDF - {file.filename}"
+                )
+            else:
+                raise Exception("No images generated from PDF")
             
             return results
         
