@@ -13,6 +13,7 @@ import logging
 from alternative_parser import PDFProcessor
 from html_generator import HTMLGenerator
 from epub_generator import EPUBGenerator
+from storage import storage
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -122,15 +123,28 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
         
         results = await loop.run_in_executor(None, process_pdf_sync)
         
-        # Clean up PDF file
+        # Upload EPUB to Cloudinary
+        epub_path = os.path.join(output_dir, f"{conversion_id}.epub")
+        upload_result = storage.upload_epub(epub_path, conversion_id)
+        
+        if upload_result:
+            download_url = upload_result["secure_url"]
+            logger.info(f"EPUB uploaded to Cloudinary: {upload_result['public_id']}")
+        else:
+            # Fallback to local download
+            download_url = f"/api/download/{conversion_id}"
+            logger.warning("Cloudinary upload failed, using local fallback")
+        
+        # Clean up local files
         os.remove(pdf_path)
+        # Keep local EPUB for fallback, but could clean up later
         
         logger.info(f"Successfully converted PDF {file.filename} to EPUB. Pages: {len(results.get('pages', []))}, Words: {results.get('total_words', 0)}")
         
         return ConversionResponse(
             success=True,
             conversion_id=conversion_id,
-            download_url=f"/api/download/{conversion_id}",
+            download_url=download_url,
             pages=len(results.get('pages', [])),
             total_words=results.get('total_words', 0)
         )
