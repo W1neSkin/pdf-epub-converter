@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  # API Gateway - Entry point for all requests
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - JWT_SECRET=your-super-secret-jwt-key-for-development
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - CONVERTER_SERVICE_URL=http://converter-service:8000
+      - LIBRARY_SERVICE_URL=http://library-service:8002
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      - auth-service
+      - converter-service
+      - library-service
+    networks:
+      - microservices-network
+
+  # Authentication Service
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    expose:
+      - "8001"
+    environment:
+      - PORT=8001
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - JWT_SECRET=your-super-secret-jwt-key-for-development
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - microservices-network
+
+  # PDF Converter Service (Enhanced from existing)
+  converter-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    expose:
+      - "8000"
+    environment:
+      - PORT=8000
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - CLOUDINARY_URL=${CLOUDINARY_URL}
+      - JWT_SECRET=your-super-secret-jwt-key-for-development
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./backend:/app
+      - converter-storage:/tmp/outputs
+    networks:
+      - microservices-network
+
+  # Library Service
+  library-service:
+    build:
+      context: ./services/library-service
+      dockerfile: Dockerfile
+    expose:
+      - "8002"
+    environment:
+      - PORT=8002
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - JWT_SECRET=your-super-secret-jwt-key-for-development
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - CLOUDINARY_URL=${CLOUDINARY_URL}
+    networks:
+      - microservices-network
+
+  # Frontend (React) - Optional for full local development
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - REACT_APP_ENVIRONMENT=development
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    depends_on:
+      - api-gateway
+    networks:
+      - microservices-network
+
+networks:
+  microservices-network:
+    driver: bridge
+
+volumes:
+  converter-storage:
+    driver: local 

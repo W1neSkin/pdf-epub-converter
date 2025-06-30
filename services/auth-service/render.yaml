@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: pdf-auth-service
+    env: docker
+    dockerfilePath: ./services/auth-service/Dockerfile
+    dockerContext: .
+    branch: master
+    envVars:
+      - key: PORT
+        value: 8001
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: LOG_LEVEL
+        value: INFO 

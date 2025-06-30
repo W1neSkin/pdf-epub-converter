@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: pdf-api-gateway
+    env: docker
+    dockerfilePath: ./services/api-gateway/Dockerfile
+    dockerContext: .
+    branch: master
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: LOG_LEVEL
+        value: INFO 
