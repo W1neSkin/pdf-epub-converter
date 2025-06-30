@@ -1,11 +1,39 @@
 # PDF to EPUB Converter
 
-A comprehensive PDF to EPUB conversion system with a modern React frontend. Converts PDFs to interactive EPUB files with selectable text overlays that maintain the visual appearance of the original PDF while providing full text selection and copying capabilities.
+A comprehensive PDF to EPUB conversion system with a modern React frontend and **microservices architecture**. Converts PDFs to interactive EPUB files with selectable text overlays that maintain the visual appearance of the original PDF while providing full text selection and copying capabilities.
 
 ## 🌐 Live Demo
 **Try it now:** https://w1neskin.github.io/pdf-epub-converter
 
 Upload an EPUB file and experience the interactive text selection features!
+
+## 📚 **Complete Documentation**
+**🎯 [All documentation now available in `docs/` folder](./docs/)**
+
+- **🚀 [Deployment Guide](./docs/render-deploy.md)** - Deploy to Render with all fixes included
+- **🔧 [Environment Setup](./docs/environment-setup.md)** - Complete configuration guide  
+- **🆘 [Troubleshooting](./docs/troubleshooting.md)** - All common issues and solutions
+- **📖 [API Documentation](./docs/api-docs.md)** - Complete API reference
+- **🏗️ [Architecture Guide](./docs/MICROSERVICES_SETUP.md)** - Microservices setup
+
+## 🏢 **Microservices Architecture**
+
+```
+Frontend (GitHub Pages)
+         ↓
+API Gateway (Render)
+    ↓     ↓     ↓
+Auth   Conv   Library
+Service ice   Service
+    ↓     ↓     ↓
+    Supabase + Cloudinary
+```
+
+**Live Services:**
+- **API Gateway**: `https://pdf-converter-api-gateway.onrender.com`
+- **Auth Service**: User registration, login, JWT tokens
+- **Library Service**: Personal book management, storage tracking
+- **Converter Service**: PDF to EPUB processing
 
 ## 🌟 Features
 
@@ -35,20 +63,35 @@ Upload an EPUB file and experience the interactive text selection features!
 
 ## 🚀 Quick Start
 
-### Using Docker (Recommended)
+### **🌟 Production (Microservices)**
+**✅ Ready to use - No setup required!**
+
+1. **Visit**: https://w1neskin.github.io/pdf-epub-converter  
+2. **Convert PDFs**: Upload and convert through the web interface
+3. **Register**: Create an account for personal library features
+4. **Manage**: View your conversion history and download previous files
+
+**📖 [Complete deployment guide](./docs/render-deploy.md)** to deploy your own instance.
+
+### **💻 Local Development**
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/W1neSkin/pdf-epub-converter.git
 cd pdf-epub-converter
 
-# Start the application
+# Quick start with Docker
 docker-compose up -d
+
+# OR microservices development  
+docker-compose -f docker-compose.microservices.yml up
 
 # Access the application
 # Frontend: http://localhost:3000
 # Backend: Available for processing
 ```
+
+**📖 [See complete setup guide](./docs/MICROSERVICES_SETUP.md)** for detailed local development instructions.
 
 ### Manual Setup
 
