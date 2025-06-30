@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, status, Request, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ import shutil
 from typing import Dict, Any, Optional
 import asyncio
 import logging
+import httpx
 from alternative_parser import AlternativePDFParser
 from html_generator import HTMLPageGenerator
 from epub_generator import EPUBGenerator
@@ -19,6 +20,23 @@ from storage import storage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Environment variables
+LIBRARY_SERVICE_URL = os.getenv("LIBRARY_SERVICE_URL", "http://localhost:8002")
+
+# Utility functions
+def get_user_from_headers(request: Request) -> Optional[Dict[str, Any]]:
+    """Extract user info from gateway headers"""
+    user_id = request.headers.get("X-User-ID")
+    user_email = request.headers.get("X-User-Email")
+    
+    if user_id and user_email:
+        return {"user_id": user_id, "email": user_email}
+    return None
+
+async def get_current_user_optional(request: Request) -> Optional[Dict[str, Any]]:
+    """Get current user (optional for backward compatibility)"""
+    return get_user_from_headers(request)
+
 # Pydantic models for request/response validation
 class ConversionResponse(BaseModel):
     success: bool
@@ -26,6 +44,7 @@ class ConversionResponse(BaseModel):
     download_url: str
     pages: int
     total_words: int
+    book_id: Optional[str] = None  # New field for library integration
 
 class StatusResponse(BaseModel):
     status: str
@@ -68,7 +87,11 @@ async def health_check() -> HealthResponse:
     )
 
 @app.post("/api/convert", response_model=ConversionResponse)
-async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionResponse:
+async def convert_pdf_to_epub(
+    file: UploadFile = File(...),
+    request: Request = None,
+    user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
+) -> ConversionResponse:
     """Convert PDF file to EPUB with interactive text overlays"""
     
     # Validate file
@@ -172,6 +195,58 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
         os.remove(pdf_path)
         # Keep local EPUB for fallback, but could clean up later
         
+        book_id = None
+        
+        # Save to user's library if authenticated
+        if user:
+            try:
+                # Get file size
+                file_size = os.path.getsize(epub_path)
+                
+                # Prepare book data for library service
+                book_data = {
+                    "title": file.filename.replace('.pdf', ''),
+                    "original_filename": file.filename,
+                    "file_size": file_size,
+                    "pages": len(results.get('pages', [])),
+                    "words": results.get('total_words', 0),
+                    "cloudinary_url": download_url,
+                    "file_path": f"conversions/{conversion_id}.epub",
+                    "metadata": {
+                        "conversion_id": conversion_id,
+                        "original_format": "pdf",
+                        "converted_format": "epub"
+                    },
+                    "is_public": False
+                }
+                
+                # Send to library service
+                async with httpx.AsyncClient() as client:
+                    headers = {
+                        "X-User-ID": user["user_id"],
+                        "X-User-Email": user["email"]
+                    }
+                    response = await client.post(
+                        f"{LIBRARY_SERVICE_URL}/library/books",
+                        json=book_data,
+                        headers=headers,
+                        timeout=10.0
+                    )
+                    
+                    if response.status_code == 200:
+                        library_response = response.json()
+                        if library_response.get("success"):
+                            book_id = str(library_response["data"]["id"])
+                            logger.info(f"Book saved to library with ID: {book_id}")
+                        else:
+                            logger.warning(f"Library service returned error: {library_response}")
+                    else:
+                        logger.warning(f"Failed to save book to library: {response.status_code}")
+                        
+            except Exception as e:
+                logger.error(f"Error saving book to library: {e}")
+                # Don't fail the conversion if library save fails
+        
         logger.info(f"Successfully converted PDF {file.filename} to EPUB. Pages: {len(results.get('pages', []))}, Words: {results.get('total_words', 0)}")
         
         return ConversionResponse(
@@ -179,7 +254,8 @@ async def convert_pdf_to_epub(file: UploadFile = File(...)) -> ConversionRespons
             conversion_id=conversion_id,
             download_url=download_url,
             pages=len(results.get('pages', [])),
-            total_words=results.get('total_words', 0)
+            total_words=results.get('total_words', 0),
+            book_id=book_id
         )
         
     except Exception as e:

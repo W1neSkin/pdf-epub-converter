@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: pdf-converter-library-service
+    runtime: docker
+    dockerfilePath: ./services/library-service/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    branch: master
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: PORT
+        value: "8002" 
