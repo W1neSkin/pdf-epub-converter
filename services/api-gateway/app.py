@@ -241,7 +241,7 @@ async def detailed_health_check():
 @app.api_route("/auth/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def auth_proxy(path: str, request: Request):
     """Proxy requests to auth service"""
-    return await forward_request("auth", f"/{path}", request)
+    return await forward_request("auth", f"/auth/{path}", request)
 
 # Converter routes (auth optional for now, will be required later)
 @app.api_route("/api/convert", methods=["POST"])
@@ -263,7 +263,7 @@ async def status_proxy(conversion_id: str, request: Request, user: Optional[Dict
 @app.api_route("/library/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def library_proxy(path: str, request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     """Proxy requests to library service (auth required)"""
-    return await forward_request("library", f"/{path}", request, user)
+    return await forward_request("library", f"/library/{path}", request, user)
 
 # Converter service health check
 @app.get("/converter/health")
