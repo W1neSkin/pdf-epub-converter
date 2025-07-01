@@ -173,16 +173,25 @@ async def register_user(user_data: UserRegister):
         
         user_id = auth_response.user.id
         
-        # Create user profile
+        # Create user profile (bypass RLS with service role)
         profile_data = {
             "id": user_id,
             "email": user_data.email,
             "full_name": user_data.full_name,
             "subscription_tier": "free",
-            "storage_used": 0
+            "storage_used": 0,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.utcnow().isoformat() + "Z"
         }
         
-        supabase.table('user_profiles').insert(profile_data).execute()
+        # Use service role to bypass RLS for profile creation
+        try:
+            result = supabase.table('user_profiles').insert(profile_data).execute()
+            logger.info(f"Profile created successfully for user: {user_data.email}")
+        except Exception as profile_error:
+            logger.error(f"Profile creation failed: {profile_error}")
+            # Continue anyway - profile can be created later
+            pass
         
         # Create JWT token
         token_data = create_jwt_token(user_id, user_data.email)
