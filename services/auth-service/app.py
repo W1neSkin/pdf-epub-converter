@@ -53,8 +53,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Supabase client
-supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+# Initialize Supabase clients
+# Auth operations use anon key, admin operations use service key
+supabase_auth: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+supabase_admin: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
 
 # Security
 security = HTTPBearer(auto_error=False)
@@ -132,8 +134,8 @@ async def health_check():
 async def detailed_health_check():
     """Detailed health check with dependencies"""
     try:
-        # Test Supabase connection
-        result = supabase.table('user_profiles').select("id").limit(1).execute()
+        # Test Supabase connection using admin client
+        result = supabase_admin.table('user_profiles').select("id").limit(1).execute()
         db_connected = True
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
@@ -159,9 +161,9 @@ async def debug_register_user(user_data: UserRegister):
         # Test basic Supabase auth connection
         logger.info("DEBUG: Testing Supabase auth connection...")
         
-        # Create user in Supabase Auth
-        logger.info("DEBUG: Calling supabase.auth.sign_up...")
-        auth_response = supabase.auth.sign_up({
+        # Create user in Supabase Auth using anon key
+        logger.info("DEBUG: Calling supabase_auth.auth.sign_up...")
+        auth_response = supabase_auth.auth.sign_up({
             "email": user_data.email,
             "password": user_data.password,
             "options": {
@@ -213,8 +215,8 @@ async def debug_register_user(user_data: UserRegister):
 async def register_user(user_data: UserRegister):
     """Register a new user"""
     try:
-        # Create user in Supabase Auth
-        auth_response = supabase.auth.sign_up({
+        # Create user in Supabase Auth using anon key
+        auth_response = supabase_auth.auth.sign_up({
             "email": user_data.email,
             "password": user_data.password,
             "options": {
@@ -243,9 +245,9 @@ async def register_user(user_data: UserRegister):
             "updated_at": datetime.utcnow().isoformat() + "Z"
         }
         
-        # Use service role to bypass RLS for profile creation
+        # Use admin client to bypass RLS for profile creation
         try:
-            result = supabase.table('user_profiles').insert(profile_data).execute()
+            result = supabase_admin.table('user_profiles').insert(profile_data).execute()
             logger.info(f"Profile created successfully for user: {user_data.email}")
         except Exception as profile_error:
             logger.error(f"Profile creation failed: {profile_error}")
@@ -283,8 +285,8 @@ async def register_user(user_data: UserRegister):
 async def login_user(user_data: UserLogin):
     """Login user and return JWT token"""
     try:
-        # Authenticate with Supabase
-        auth_response = supabase.auth.sign_in_with_password({
+        # Authenticate with Supabase using anon key
+        auth_response = supabase_auth.auth.sign_in_with_password({
             "email": user_data.email,
             "password": user_data.password
         })
@@ -340,8 +342,8 @@ async def logout_user(current_user: Dict[str, Any] = Depends(get_current_user)):
 async def verify_token(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Verify JWT token and return user info"""
     try:
-        # Get user profile from database
-        result = supabase.table('user_profiles').select("*").eq('id', current_user['user_id']).execute()
+        # Get user profile from database using admin client
+        result = supabase_admin.table('user_profiles').select("*").eq('id', current_user['user_id']).execute()
         
         if not result.data:
             raise HTTPException(
@@ -376,7 +378,7 @@ async def verify_token(current_user: Dict[str, Any] = Depends(get_current_user))
 async def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Get current user's profile"""
     try:
-        result = supabase.table('user_profiles').select("*").eq('id', current_user['user_id']).execute()
+        result = supabase_admin.table('user_profiles').select("*").eq('id', current_user['user_id']).execute()
         
         if not result.data:
             raise HTTPException(
@@ -416,8 +418,8 @@ async def update_user_profile(
                 detail="No data provided for update"
             )
         
-        # Update user profile
-        result = supabase.table('user_profiles').update(update_data).eq('id', current_user['user_id']).execute()
+        # Update user profile using admin client
+        result = supabase_admin.table('user_profiles').update(update_data).eq('id', current_user['user_id']).execute()
         
         if not result.data:
             raise HTTPException(
