@@ -150,6 +150,65 @@ async def detailed_health_check():
         }
     )
 
+@app.post("/debug/register")
+async def debug_register_user(user_data: UserRegister):
+    """Debug registration endpoint with detailed error reporting"""
+    try:
+        logger.info(f"DEBUG: Starting registration for {user_data.email}")
+        
+        # Test basic Supabase auth connection
+        logger.info("DEBUG: Testing Supabase auth connection...")
+        
+        # Create user in Supabase Auth
+        logger.info("DEBUG: Calling supabase.auth.sign_up...")
+        auth_response = supabase.auth.sign_up({
+            "email": user_data.email,
+            "password": user_data.password,
+            "options": {
+                "data": {
+                    "full_name": user_data.full_name
+                }
+            }
+        })
+        
+        logger.info(f"DEBUG: Auth response received: {auth_response}")
+        
+        if not auth_response.user:
+            logger.error("DEBUG: No user in auth response")
+            return {"error": "No user in auth response", "response": str(auth_response)}
+        
+        user_id = auth_response.user.id
+        logger.info(f"DEBUG: User created with ID: {user_id}")
+        
+        # Create JWT token
+        logger.info("DEBUG: Creating JWT token...")
+        token_data = create_jwt_token(user_id, user_data.email)
+        logger.info(f"DEBUG: Token created: {token_data}")
+        
+        # Try to create AuthToken object
+        logger.info("DEBUG: Creating AuthToken object...")
+        auth_token = AuthToken(**token_data)
+        logger.info(f"DEBUG: AuthToken created: {auth_token}")
+        
+        return {
+            "success": True,
+            "message": "Debug registration successful", 
+            "user_id": user_id,
+            "token_data": token_data
+        }
+        
+    except Exception as e:
+        logger.error(f"DEBUG: Registration failed with error: {e}")
+        logger.error(f"DEBUG: Error type: {type(e)}")
+        import traceback
+        logger.error(f"DEBUG: Traceback: {traceback.format_exc()}")
+        
+        return {
+            "error": str(e),
+            "error_type": str(type(e)),
+            "traceback": traceback.format_exc()
+        }
+
 @app.post("/auth/register", response_model=AuthResponse)
 async def register_user(user_data: UserRegister):
     """Register a new user"""
