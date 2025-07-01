@@ -154,18 +154,6 @@ async def detailed_health_check():
 async def register_user(user_data: UserRegister):
     """Register a new user"""
     try:
-        # Check if user already exists
-        existing_user = supabase.auth.get_user_by_email(user_data.email)
-        if existing_user.user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User with this email already exists"
-            )
-    except Exception:
-        # User doesn't exist, continue with registration
-        pass
-    
-    try:
         # Create user in Supabase Auth
         auth_response = supabase.auth.sign_up({
             "email": user_data.email,
@@ -209,6 +197,15 @@ async def register_user(user_data: UserRegister):
         
     except Exception as e:
         logger.error(f"Registration failed: {e}")
+        error_message = str(e).lower()
+        
+        # Handle specific Supabase errors
+        if "already registered" in error_message or "email already exists" in error_message or "user already exists" in error_message:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User with this email already exists"
+            )
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Registration failed: {str(e)}"
