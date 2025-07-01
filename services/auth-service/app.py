@@ -86,7 +86,7 @@ def create_jwt_token(user_id: str, email: str) -> Dict[str, Any]:
         "access_token": token,
         "token_type": "bearer",
         "expires_in": settings.JWT_EXPIRATION_HOURS * 3600,
-        "user_id": user_id
+        "user_id": UUID(user_id)  # Convert string to UUID for Pydantic validation
     }
 
 def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
