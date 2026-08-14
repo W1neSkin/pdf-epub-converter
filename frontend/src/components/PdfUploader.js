@@ -138,7 +138,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         headers['Authorization'] = `Bearer ${user.token}`;
       }
 
-      // Free Render sleeps. A 502 usually means the converter is waking up.
+      // Free Render sleeps. Wait and retry instead of showing a raw 502.
       const sendConvert = () => {
         const upload = new FormData();
         upload.append('file', file);
@@ -148,15 +148,23 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           body: upload,
         });
       };
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const isWaking = (status) => status === 502 || status === 503 || status === 504;
 
       let response = await sendConvert();
-      if (response.status === 502 || response.status === 503) {
-        setConversionStatus('Server is starting. Trying again...');
-        await new Promise((resolve) => setTimeout(resolve, 4000));
+      let wakeTry = 1;
+      while (isWaking(response.status) && wakeTry < 4) {
+        setConversionStatus('Server is starting. Please wait...');
+        setProgress(15);
+        await sleep(5000);
+        wakeTry += 1;
         response = await sendConvert();
       }
 
       if (!response.ok) {
+        if (isWaking(response.status)) {
+          throw new Error('The converter is still starting. Wait a minute and try again.');
+        }
         throw new Error(`Server error: ${response.status}`);
       }
 
@@ -174,6 +182,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           headers: statusHeaders
         });
         if (!statusResponse.ok) {
+          if (statusResponse.status === 502 || statusResponse.status === 503) {
+            throw new Error('The converter is still starting. Wait a minute and try again.');
+          }
           throw new Error(`Status check failed: ${statusResponse.status}`);
         }
         const statusData = await statusResponse.json();
@@ -207,12 +218,12 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         setTimeout(() => {
           pollStatus(conversionId, attempt + 1).catch((pollError) => {
             console.error('Upload error:', pollError);
-            setConversionStatus(`Error: ${pollError.message}`);
+            setConversionStatus(pollError.message);
             setProgress(0);
             setTimeout(() => {
               setIsConverting(false);
               setConversionStatus('');
-            }, 3000);
+            }, 8000);
           });
         }, 2000);
       };
@@ -220,13 +231,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       await pollStatus(result.conversion_id, 1);
     } catch (error) {
       console.error('Upload error:', error);
-      setConversionStatus(`Error: ${error.message}`);
+      setConversionStatus(error.message);
       setProgress(0);
-      
+      // Keep the message long enough to read. Do not flash a raw 502.
       setTimeout(() => {
         setIsConverting(false);
         setConversionStatus('');
-      }, 3000);
+      }, 8000);
     }
   }, [user, onEpubGenerated]);
 
