@@ -124,8 +124,8 @@ async def convert_pdf_to_epub(
         raise HTTPException(status_code=400, detail="No file provided")
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="File must be a PDF")
-    if file.content_type and file.content_type != 'application/pdf':
-        raise HTTPException(status_code=400, detail="Invalid file type")
+    # Do not require content_type == application/pdf. Browsers and the
+    # gateway often send application/octet-stream for a real PDF.
 
     conversion_id = str(uuid.uuid4())
     pdf_path = os.path.join(UPLOAD_FOLDER, f"{conversion_id}.pdf")

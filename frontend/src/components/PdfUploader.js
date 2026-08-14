@@ -165,7 +165,14 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         if (isWaking(response.status)) {
           throw new Error('The converter is still starting. Wait a minute and try again.');
         }
-        throw new Error(`Server error: ${response.status}`);
+        let serverMessage = '';
+        try {
+          const errBody = await response.json();
+          serverMessage = errBody.message || errBody.detail || '';
+        } catch (parseError) {
+          serverMessage = '';
+        }
+        throw new Error(serverMessage || `Could not convert this file (${response.status})`);
       }
 
       const result = await response.json();
