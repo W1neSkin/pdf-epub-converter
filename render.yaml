@@ -13,5 +13,7 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: LIBRARY_SERVICE_URL
+        value: https://pdf-converter-library-service.onrender.com
     healthCheckPath: /
     autoDeploy: true 

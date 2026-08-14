@@ -17,7 +17,12 @@ from storage import storage
 
 logger = logging.getLogger(__name__)
 
-LIBRARY_SERVICE_URL = os.getenv("LIBRARY_SERVICE_URL", "http://localhost:8002")
+# Local default is localhost. On Render the converter has no LIBRARY_SERVICE_URL,
+# so fall back to the live library service so converted books get saved.
+LIBRARY_SERVICE_URL = os.getenv(
+    "LIBRARY_SERVICE_URL",
+    "https://pdf-converter-library-service.onrender.com",
+)
 
 
 def status_path(output_dir: str) -> str:
