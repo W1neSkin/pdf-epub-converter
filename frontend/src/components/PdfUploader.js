@@ -138,7 +138,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         headers['Authorization'] = `Bearer ${user.token}`;
       }
 
-      // Free Render sleeps. Wait and retry instead of showing a raw 502.
+      // Free Render can drop the first request. Retry instead of a raw NetworkError.
       const sendConvert = () => {
         const upload = new FormData();
         upload.append('file', file);
@@ -150,15 +150,44 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       };
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const isWaking = (status) => status === 502 || status === 503 || status === 504;
+      const isNetworkError = (err) => {
+        const text = String(err && err.message ? err.message : err).toLowerCase();
+        return (
+          text.includes('networkerror') ||
+          text.includes('failed to fetch') ||
+          text.includes('network request failed') ||
+          text.includes('load failed')
+        );
+      };
 
-      let response = await sendConvert();
-      let wakeTry = 1;
-      while (isWaking(response.status) && wakeTry < 4) {
-        setConversionStatus('Server is starting. Please wait...');
-        setProgress(15);
-        await sleep(5000);
-        wakeTry += 1;
-        response = await sendConvert();
+      let response = null;
+      for (let wakeTry = 1; wakeTry <= 4; wakeTry += 1) {
+        try {
+          response = await sendConvert();
+          if (!isWaking(response.status)) {
+            break;
+          }
+          if (wakeTry === 4) {
+            throw new Error('The converter is still starting. Wait a minute and try again.');
+          }
+          setConversionStatus('Server is starting. Please wait...');
+          setProgress(15);
+          await sleep(5000);
+        } catch (err) {
+          if (err.message && err.message.includes('still starting')) {
+            throw err;
+          }
+          if (!isNetworkError(err) || wakeTry === 4) {
+            throw new Error(
+              isNetworkError(err)
+                ? 'Could not reach the converter. Wait a minute and try again.'
+                : err.message
+            );
+          }
+          setConversionStatus('Connection lost. Trying again...');
+          setProgress(15);
+          await sleep(5000);
+        }
       }
 
       if (!response.ok) {
