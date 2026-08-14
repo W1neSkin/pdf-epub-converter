@@ -180,6 +180,16 @@ async def register_user(user_data: UserRegister):
             )
         
         user_id = auth_response.user.id
+
+        # New Supabase projects confirm email by default. The site asks
+        # users to log in right after register, so confirm the account here.
+        try:
+            supabase_admin.auth.admin.update_user_by_id(
+                user_id,
+                {"email_confirm": True}
+            )
+        except Exception as confirm_error:
+            logger.warning(f"Auto-confirm email failed: {confirm_error}")
         
         # Create user profile (bypass RLS with service role)
         profile_data = {

@@ -177,9 +177,13 @@ async def forward_request(
                     else:
                         data[key] = value
                 
+                # Drop the original body headers. httpx builds a new multipart body.
                 response = await http_client.post(
                     target_url,
-                    headers={k: v for k, v in headers.items() if k.lower() != "content-type"},
+                    headers={
+                        k: v for k, v in headers.items()
+                        if k.lower() not in ("content-type", "content-length")
+                    },
                     files=files,
                     data=data,
                     timeout=request_timeout

@@ -5,4 +5,6 @@ PyJWT==2.8.0
 python-dotenv==1.0.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
-email-validator==2.1.0 
+email-validator==2.1.0
+# Needed so the gateway can read PDF uploads and forward them to the converter.
+python-multipart==0.0.6 
