@@ -105,20 +105,20 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     payload = verify_jwt_token(credentials.credentials)
     return payload
 
-def enforce_rate_limit(request: Request):
-    """Limit convert requests per IP using config RATE_LIMIT_* values."""
-    client_ip = request.client.host if request.client else "unknown"
+def enforce_rate_limit(request: Request, user: Optional[Dict[str, Any]] = None):
+    """Limit converts per user. Do not key on IP: behind Render many users share one."""
+    key = str((user or {}).get("user_id") or "anonymous")
     now = time.time()
-    window = settings.RATE_LIMIT_WINDOW
-    limit = settings.RATE_LIMIT_REQUESTS
-    recent = [t for t in _rate_hits[client_ip] if now - t < window]
+    window = 300
+    limit = 20
+    recent = [t for t in _rate_hits[key] if now - t < window]
     if len(recent) >= limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please wait and try again."
+            detail="Too many conversions. Wait a minute and try again."
         )
     recent.append(now)
-    _rate_hits[client_ip] = recent
+    _rate_hits[key] = recent
 
 async def forward_request(
     service_name: str,
@@ -290,7 +290,7 @@ async def auth_proxy(path: str, request: Request):
 @app.api_route("/api/convert", methods=["POST"])
 async def convert_proxy(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     """Proxy PDF conversion requests to converter service"""
-    enforce_rate_limit(request)
+    enforce_rate_limit(request, user)
     return await forward_request(
         "converter",
         "/api/convert",

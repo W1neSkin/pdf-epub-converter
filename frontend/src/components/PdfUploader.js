@@ -233,6 +233,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         if (isWaking(response.status)) {
           throw new Error('The converter is still starting. Wait a minute and try again.');
         }
+        if (response.status === 429) {
+          throw new Error('Too many conversions. Wait a minute and try again.');
+        }
         let serverMessage = '';
         try {
           const errBody = await response.json();
