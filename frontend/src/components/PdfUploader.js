@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { API_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES } from '../config';
 import { getPdfInfo } from '../pdfInfo';
@@ -13,19 +13,20 @@ const UploaderContainer = styled.div`
 `;
 
 const DropZone = styled.div`
-  border: 3px dashed ${props => props.isDragOver ? '#ffd700' : 'rgba(255, 255, 255, 0.3)'};
+  border: 3px dashed ${props => props.$isDragOver ? '#ffd700' : 'rgba(255, 255, 255, 0.3)'};
   border-radius: 1rem;
   padding: 3rem;
   text-align: center;
-  background: ${props => props.isDragOver ? 'rgba(255, 215, 0, 0.1)' : 'rgba(255, 255, 255, 0.05)'};
+  background: ${props => props.$isDragOver ? 'rgba(255, 215, 0, 0.1)' : 'rgba(255, 255, 255, 0.05)'};
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
-  cursor: pointer;
-  min-height: 200px;
+  width: 100%;
+  min-height: 280px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  user-select: none;
 `;
 
 const UploadIcon = styled.i`
@@ -68,6 +69,17 @@ const FileInfo = styled.div`
 
 const HiddenInput = styled.input`
   display: none;
+`;
+
+const ChooseButton = styled.button`
+  margin-top: 1.25rem;
+  background: linear-gradient(135deg, #ffd700, #ffed4e);
+  color: #333;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  cursor: pointer;
 `;
 
 const ConversionStatus = styled.div`
@@ -120,8 +132,22 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const [progress, setProgress] = useState(0);
   const [limitError, setLimitError] = useState('');
   const [fileInfo, setFileInfo] = useState(null);
+  const dragDepth = useRef(0);
+  const fileInputRef = useRef(null);
+  const lastUpload = useRef({ key: '', at: 0 });
 
   const uploadFile = useCallback(async (file) => {
+    if (!file) {
+      return;
+    }
+    // Drop can fire twice (zone + window, or drop + file input change).
+    const uploadKey = `${file.name}:${file.size}:${file.lastModified}`;
+    const now = Date.now();
+    if (lastUpload.current.key === uploadKey && now - lastUpload.current.at < 1500) {
+      return;
+    }
+    lastUpload.current = { key: uploadKey, at: now };
+
     setLimitError('');
     setFileInfo(null);
     const isPdf = file && (
@@ -200,13 +226,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       };
 
       let response = null;
-      for (let wakeTry = 1; wakeTry <= 4; wakeTry += 1) {
+      for (let wakeTry = 1; wakeTry <= 2; wakeTry += 1) {
         try {
           response = await sendConvert();
           if (!isWaking(response.status)) {
             break;
           }
-          if (wakeTry === 4) {
+          if (wakeTry === 2) {
             throw new Error('The converter is still starting. Wait a minute and try again.');
           }
           setConversionStatus('Server is starting. Please wait...');
@@ -216,7 +242,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           if (err.message && err.message.includes('still starting')) {
             throw err;
           }
-          if (!isNetworkError(err) || wakeTry === 4) {
+          if (!isNetworkError(err) || wakeTry === 2) {
             throw new Error(
               isNetworkError(err)
                 ? 'Could not reach the converter. Wait a minute and try again.'
@@ -234,7 +260,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           throw new Error('The converter is still starting. Wait a minute and try again.');
         }
         if (response.status === 429) {
-          throw new Error('Too many conversions. Wait a minute and try again.');
+          throw new Error('Please wait a minute and try once more.');
         }
         let serverMessage = '';
         try {
@@ -272,12 +298,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
             setConversionStatus('Lost the conversion job. Checking again...');
             setTimeout(() => {
               pollStatus(conversionId, attempt + 1).catch((pollError) => {
-                setConversionStatus(pollError.message);
+                setIsConverting(false);
                 setProgress(0);
-                setTimeout(() => {
-                  setIsConverting(false);
-                  setConversionStatus('');
-                }, 8000);
+                setConversionStatus('');
+                setLimitError(pollError.message);
               });
             }, 3000);
             return;
@@ -321,12 +345,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         setTimeout(() => {
           pollStatus(conversionId, attempt + 1).catch((pollError) => {
             console.error('Upload error:', pollError);
-            setConversionStatus(pollError.message);
+            setIsConverting(false);
             setProgress(0);
-            setTimeout(() => {
-              setIsConverting(false);
-              setConversionStatus('');
-            }, 8000);
+            setConversionStatus('');
+            setLimitError(pollError.message);
           });
         }, 2000);
       };
@@ -334,44 +356,86 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       await pollStatus(result.conversion_id, 1);
     } catch (error) {
       console.error('Upload error:', error);
-      setConversionStatus(error.message);
+      setIsConverting(false);
       setProgress(0);
-      // Keep the message long enough to read. Do not flash a raw 502.
-      setTimeout(() => {
-        setIsConverting(false);
-        setConversionStatus('');
-      }, 8000);
+      setConversionStatus('');
+      setLimitError(error.message);
     }
   }, [user, onEpubGenerated]);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      uploadFile(files[0]);
-    }
-  }, [uploadFile]);
+  // Capture-phase listeners beat the browser default (red "blocked" cursor).
+  useEffect(() => {
+    const allowDrop = (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+    const onDrop = (e) => {
+      // Only block the browser from opening the PDF. Upload is handled by the box.
+      e.preventDefault();
+    };
+    document.addEventListener('dragenter', allowDrop, true);
+    document.addEventListener('dragover', allowDrop, true);
+    document.addEventListener('drop', onDrop, true);
+    return () => {
+      document.removeEventListener('dragenter', allowDrop, true);
+      document.removeEventListener('dragover', allowDrop, true);
+      document.removeEventListener('drop', onDrop, true);
+    };
+  }, []);
 
-  const handleDragOver = useCallback((e) => {
+  const handleDragEnter = useCallback((e) => {
     e.preventDefault();
+    e.stopPropagation();
+    dragDepth.current += 1;
     setIsDragOver(true);
   }, []);
 
-  const handleDragLeave = useCallback(() => {
-    setIsDragOver(false);
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
   }, []);
 
-  const handleClick = useCallback(() => {
-    document.getElementById('pdf-upload').click();
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setIsDragOver(false);
+    }
   }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth.current = 0;
+    setIsDragOver(false);
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) {
+      uploadFile(file);
+    }
+  }, [uploadFile]);
 
   const handleFileInput = useCallback((e) => {
     const files = e.target.files;
-    if (files.length > 0) {
+    if (files && files.length > 0) {
       uploadFile(files[0]);
+      e.target.value = '';
     }
   }, [uploadFile]);
+
+  const openFilePicker = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }, []);
 
   const handleDownload = useCallback(async () => {
     if (!downloadUrl) {
@@ -418,14 +482,14 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     <UploaderContainer>
       {!isConverting && !downloadUrl && (
         <DropZone
-          isDragOver={isDragOver}
-          onDrop={handleDrop}
+          $isDragOver={isDragOver}
+          onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
-          onClick={handleClick}
+          onDrop={handleDrop}
         >
           <UploadIcon className="fas fa-file-pdf" />
-          <UploadText>Drop PDF file here or click to upload</UploadText>
+          <UploadText>Drop a PDF here</UploadText>
           <UploadSubtext>Convert a PDF to EPUB with selectable text</UploadSubtext>
           <LimitsNote>
             Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
@@ -438,10 +502,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
             </FileInfo>
           )}
           {limitError && <LimitError>{limitError}</LimitError>}
+          <ChooseButton type="button" onClick={openFilePicker}>
+            Choose PDF
+          </ChooseButton>
           <HiddenInput
-            id="pdf-upload"
+            ref={fileInputRef}
             type="file"
-            accept=".pdf"
+            accept=".pdf,application/pdf"
             onChange={handleFileInput}
           />
         </DropZone>
