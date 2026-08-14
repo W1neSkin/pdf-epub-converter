@@ -21,12 +21,13 @@ class AlternativePDFParser:
         """Initialize the parser."""
         pass
     
-    def extract_text_pdfplumber(self, pdf_path: str) -> List[Dict]:
+    def extract_text_pdfplumber(self, pdf_path: str, on_progress=None) -> List[Dict]:
         """Extract text using pdfplumber (best for text extraction)."""
         pages_data = []
         
         try:
             with pdfplumber.open(pdf_path) as pdf:
+                total = len(pdf.pages)
                 for page_num, page in enumerate(pdf.pages, 1):
                     # Extract text
                     text = page.extract_text() or ""
@@ -59,6 +60,14 @@ class AlternativePDFParser:
                     })
                     
                     print(f"Extracted text from page {page_num}: {len(text)} characters")
+                    if on_progress and total:
+                        percent = 10 + int(20 * page_num / total)
+                        on_progress(
+                            percent,
+                            f"Extracting text from page {page_num} of {total}",
+                            page_num,
+                            total,
+                        )
         
         except Exception as e:
             print(f"Error with pdfplumber: {e}")
@@ -98,16 +107,19 @@ class AlternativePDFParser:
         
         return pages_data
     
-    def convert_to_images(self, pdf_path: str, output_dir: str) -> List[str]:
+    def convert_to_images(self, pdf_path: str, output_dir: str, on_progress=None) -> List[str]:
         """Convert PDF pages to images."""
         image_paths = []
         
         try:
             print("Converting PDF pages to images...")
+            if on_progress:
+                on_progress(32, "Rendering page images...", 0, 0)
             # Convert PDF to images
             images = convert_from_path(pdf_path, dpi=150)  # 150 DPI for good quality
             
             os.makedirs(output_dir, exist_ok=True)
+            total = len(images)
             
             for i, image in enumerate(images, 1):
                 image_filename = f"page_{i:03d}.png"
@@ -115,6 +127,14 @@ class AlternativePDFParser:
                 image.save(image_path, 'PNG')
                 image_paths.append(image_path)
                 print(f"Saved page {i} as {image_path}")
+                if on_progress and total:
+                    percent = 32 + int(20 * i / total)
+                    on_progress(
+                        percent,
+                        f"Saving page image {i} of {total}",
+                        i,
+                        total,
+                    )
         
         except Exception as e:
             print(f"Error converting to images: {e}")
@@ -122,7 +142,7 @@ class AlternativePDFParser:
         
         return image_paths
     
-    def parse_pdf(self, pdf_path: str, output_dir: str = "alternative_output") -> Dict:
+    def parse_pdf(self, pdf_path: str, output_dir: str = "alternative_output", on_progress=None) -> Dict:
         """
         Parse PDF using multiple methods for maximum compatibility.
         """
@@ -134,15 +154,17 @@ class AlternativePDFParser:
         
         # Method 1: pdfplumber (best for text)
         print("📝 Extracting text with pdfplumber...")
-        pdfplumber_data = self.extract_text_pdfplumber(pdf_path)
+        pdfplumber_data = self.extract_text_pdfplumber(pdf_path, on_progress=on_progress)
         
         # Method 2: PyPDF2 (fallback)
         print("\n📝 Extracting text with PyPDF2 (fallback)...")
+        if on_progress:
+            on_progress(30, "Checking leftover pages...", 0, 0)
         pypdf2_data = self.extract_text_pypdf2(pdf_path)
         
         # Method 3: Convert to images
         print("\n🖼️ Converting pages to images...")
-        image_paths = self.convert_to_images(pdf_path, output_dir)
+        image_paths = self.convert_to_images(pdf_path, output_dir, on_progress=on_progress)
         
         # Combine results - prefer pdfplumber data
         final_pages = []

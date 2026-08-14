@@ -119,19 +119,14 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     }
 
     setIsConverting(true);
-    setConversionStatus('Preparing upload...');
-    setProgress(10);
+    setDownloadUrl('');
+    setConversionStatus('Uploading PDF...');
+    setProgress(0);
 
     try {
-      setConversionStatus('Uploading PDF...');
-      setProgress(20);
-
       if (onEpubGenerated) {
         onEpubGenerated(null);
       }
-
-      setConversionStatus('Processing PDF...');
-      setProgress(40);
 
       const headers = {};
       if (user?.token) {
@@ -171,7 +166,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
             throw new Error('The converter is still starting. Wait a minute and try again.');
           }
           setConversionStatus('Server is starting. Please wait...');
-          setProgress(15);
+          setProgress(0);
           await sleep(5000);
         } catch (err) {
           if (err.message && err.message.includes('still starting')) {
@@ -185,7 +180,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
             );
           }
           setConversionStatus('Connection lost. Trying again...');
-          setProgress(15);
+          setProgress(0);
           await sleep(5000);
         }
       }
@@ -210,6 +205,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         throw new Error(result.message || 'Conversion failed');
       }
 
+      // Upload is done. From here the bar follows the server, not fake percents.
+      setConversionStatus('Uploaded. Conversion started...');
+      setProgress(5);
+
       // Convert now returns immediately. Poll until the background job finishes.
       const maxAttempts = 150;
       const pollStatus = async (conversionId, attempt) => {
@@ -229,7 +228,8 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           setConversionStatus(statusData.message);
         }
         if (typeof statusData.progress === 'number') {
-          setProgress(statusData.progress);
+          // Never jump backwards. The old UI leapt to 40% before work started.
+          setProgress((current) => Math.max(current, statusData.progress));
         }
 
         if (statusData.status === 'completed' && statusData.download_url) {

@@ -66,21 +66,23 @@ def run_conversion_job(
 ) -> None:
     """Run the full PDF -> EPUB pipeline and update status.json as it goes."""
     try:
-        write_status(
-            output_dir,
-            status="processing",
-            progress=20,
-            message="Extracting text and page images...",
-        )
-        processor = AlternativePDFParser()
-        results = processor.parse_pdf(pdf_path, output_dir)
+        def report(progress: int, message: str, current_page: int = 0, pages: int = 0) -> None:
+            # Live status for the progress bar. Do not invent large jumps.
+            write_status(
+                output_dir,
+                status="processing",
+                progress=progress,
+                message=message,
+                current_page=current_page or None,
+                pages=pages or None,
+            )
 
-        write_status(
-            output_dir,
-            status="processing",
-            progress=50,
-            message="Building interactive HTML pages...",
-        )
+        report(8, "Reading the PDF...")
+        processor = AlternativePDFParser()
+        results = processor.parse_pdf(pdf_path, output_dir, on_progress=report)
+
+        page_count = len(results.get("pages", []))
+        report(55, "Building interactive pages...", pages=page_count)
         html_generator = HTMLPageGenerator()
         html_files = html_generator.generate_html_pages(
             pdf_path=pdf_path,
@@ -90,12 +92,7 @@ def run_conversion_job(
         if not html_files:
             raise Exception("No pages generated from PDF")
 
-        write_status(
-            output_dir,
-            status="processing",
-            progress=75,
-            message="Packaging EPUB...",
-        )
+        report(80, "Packaging EPUB...", pages=page_count)
         epub_path = os.path.join(output_dir, f"{conversion_id}.epub")
         EPUBGenerator().generate_epub(
             html_dir=output_dir,
@@ -104,12 +101,7 @@ def run_conversion_job(
             title=f"Converted PDF - {filename}",
         )
 
-        write_status(
-            output_dir,
-            status="processing",
-            progress=90,
-            message="Uploading EPUB...",
-        )
+        report(90, "Saving EPUB...", pages=page_count)
         upload_result = storage.upload_epub(epub_path, conversion_id)
         if upload_result:
             download_url = upload_result["secure_url"]
@@ -117,12 +109,11 @@ def run_conversion_job(
             download_url = f"/api/download/{conversion_id}"
             logger.warning("Cloudinary upload failed, using local fallback")
 
-        pages = len(results.get("pages", []))
         total_words = results.get("total_words", 0)
         book_id = _save_to_library(
             filename=filename,
             file_size=os.path.getsize(epub_path),
-            pages=pages,
+            pages=page_count,
             words=total_words,
             download_url=download_url,
             conversion_id=conversion_id,
@@ -139,12 +130,12 @@ def run_conversion_job(
             progress=100,
             message="Conversion completed",
             download_url=download_url,
-            pages=pages,
+            pages=page_count,
             total_words=total_words,
             book_id=book_id,
             file_size=os.path.getsize(epub_path),
         )
-        logger.info("Conversion %s completed: %s pages", conversion_id, pages)
+        logger.info("Conversion %s completed: %s pages", conversion_id, page_count)
     except Exception as exc:
         logger.error("Conversion %s failed: %s", conversion_id, exc)
         write_status(

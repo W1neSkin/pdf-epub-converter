@@ -70,6 +70,7 @@ class StatusResponse(BaseModel):
     file_size: Optional[int] = None
     download_url: Optional[str] = None
     pages: Optional[int] = None
+    current_page: Optional[int] = None
     total_words: Optional[int] = None
     book_id: Optional[str] = None
 
@@ -218,6 +219,7 @@ async def get_conversion_status(
         file_size=job.get("file_size"),
         download_url=job.get("download_url"),
         pages=job.get("pages"),
+        current_page=job.get("current_page"),
         total_words=job.get("total_words"),
         book_id=job.get("book_id"),
     )
