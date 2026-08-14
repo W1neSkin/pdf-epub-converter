@@ -1,7 +1,7 @@
 """
 API Gateway for PDF to EPUB Converter
 Routes requests to appropriate microservices
-Handles authentication, rate limiting, and CORS
+Handles authentication, routing, and CORS
 """
 
 import os
@@ -17,8 +17,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 import jwt
-import time
-from collections import defaultdict
 
 # Add shared directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
@@ -63,11 +61,6 @@ SERVICES = {
 # HTTP client for inter-service communication
 http_client = httpx.AsyncClient(timeout=settings.TIMEOUT)
 
-# Convert limit per user. Only successful jobs count.
-CONVERT_RATE_LIMIT = 100
-CONVERT_RATE_WINDOW = 300
-_rate_hits = defaultdict(list)
-
 # Utility Functions
 def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify JWT token"""
@@ -106,30 +99,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     payload = verify_jwt_token(credentials.credentials)
     return payload
-
-def _convert_rate_key(user: Optional[Dict[str, Any]] = None) -> str:
-    return str((user or {}).get("user_id") or "anonymous")
-
-
-def enforce_rate_limit(request: Request, user: Optional[Dict[str, Any]] = None) -> str:
-    """Block only a burst of successful converts. Failed/waking retries must not count."""
-    key = _convert_rate_key(user)
-    now = time.time()
-    recent = [t for t in _rate_hits[key] if now - t < CONVERT_RATE_WINDOW]
-    if len(recent) >= CONVERT_RATE_LIMIT:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many conversions. Wait a minute and try again."
-        )
-    return key
-
-
-def record_convert_hit(key: str) -> None:
-    """Count a convert only after the converter accepted it."""
-    now = time.time()
-    recent = [t for t in _rate_hits[key] if now - t < CONVERT_RATE_WINDOW]
-    recent.append(now)
-    _rate_hits[key] = recent
 
 async def forward_request(
     service_name: str,
@@ -301,18 +270,14 @@ async def auth_proxy(path: str, request: Request):
 @app.api_route("/api/convert", methods=["POST"])
 async def convert_proxy(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     """Proxy PDF conversion requests to converter service"""
-    rate_key = enforce_rate_limit(request, user)
-    response = await forward_request(
+    # No convert rate limit: retries while Render wakes were counted as real jobs.
+    return await forward_request(
         "converter",
         "/api/convert",
         request,
         user,
         timeout=settings.CONVERT_TIMEOUT
     )
-    # 502/503 while Render wakes used to fill the bucket and fake a 429.
-    if 200 <= response.status_code < 300:
-        record_convert_hit(rate_key)
-    return response
 
 @app.api_route("/api/download/{file_id}", methods=["GET"])
 async def download_proxy(file_id: str, request: Request, user: Dict[str, Any] = Depends(get_current_user)):

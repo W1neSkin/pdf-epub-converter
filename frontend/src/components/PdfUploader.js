@@ -260,7 +260,14 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           throw new Error('The converter is still starting. Wait a minute and try again.');
         }
         if (response.status === 429) {
-          throw new Error('Please wait a minute and try once more.');
+          let retryMessage = '';
+          try {
+            const errBody = await response.json();
+            retryMessage = errBody.message || errBody.detail || '';
+          } catch (parseError) {
+            retryMessage = '';
+          }
+          throw new Error(retryMessage || 'Please wait a minute and try once more.');
         }
         let serverMessage = '';
         try {
