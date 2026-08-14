@@ -123,9 +123,6 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     setProgress(10);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
       setConversionStatus('Uploading PDF...');
       setProgress(20);
 
@@ -141,11 +138,23 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         headers['Authorization'] = `Bearer ${user.token}`;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/convert`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
+      // Free Render sleeps. A 502 usually means the converter is waking up.
+      const sendConvert = () => {
+        const upload = new FormData();
+        upload.append('file', file);
+        return fetch(`${API_BASE_URL}/api/convert`, {
+          method: 'POST',
+          headers,
+          body: upload,
+        });
+      };
+
+      let response = await sendConvert();
+      if (response.status === 502 || response.status === 503) {
+        setConversionStatus('Server is starting. Trying again...');
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        response = await sendConvert();
+      }
 
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
