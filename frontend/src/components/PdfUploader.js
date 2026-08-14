@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import styled from 'styled-components';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES, countPdfPages } from '../config';
 
 const UploaderContainer = styled.div`
   display: flex;
@@ -42,6 +42,20 @@ const UploadText = styled.div`
 const UploadSubtext = styled.div`
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.9rem;
+`;
+
+const LimitsNote = styled.div`
+  margin-top: 1rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+  line-height: 1.5;
+`;
+
+const LimitError = styled.div`
+  margin-top: 0.75rem;
+  color: #fecaca;
+  font-size: 0.95rem;
+  line-height: 1.4;
 `;
 
 const HiddenInput = styled.input`
@@ -96,25 +110,38 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const [conversionStatus, setConversionStatus] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [progress, setProgress] = useState(0);
+  const [limitError, setLimitError] = useState('');
 
   const uploadFile = useCallback(async (file) => {
+    setLimitError('');
     const isPdf = file && (
       file.type === 'application/pdf' ||
       file.name.toLowerCase().endsWith('.pdf')
     );
     if (!isPdf) {
-      alert('Please select a valid PDF file');
+      setLimitError('Please choose a PDF file.');
       return;
     }
 
-    const maxBytes = 50 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      alert('PDF is too large. Maximum size is 50MB');
+    const sizeMb = file.size / (1024 * 1024);
+    if (sizeMb > MAX_PDF_MB) {
+      setLimitError(
+        `This file is ${sizeMb.toFixed(1)} MB. Maximum is ${MAX_PDF_MB} MB.`
+      );
+      return;
+    }
+
+    // Count pages locally so a 300+ page book is rejected before the upload.
+    const pageCount = await countPdfPages(file);
+    if (pageCount > MAX_PDF_PAGES) {
+      setLimitError(
+        `This PDF has ${pageCount} pages. Maximum is ${MAX_PDF_PAGES} pages.`
+      );
       return;
     }
 
     if (!user?.token) {
-      alert('Authentication required. Please log in first.');
+      setLimitError('Please log in first.');
       return;
     }
 
@@ -338,7 +365,11 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         >
           <UploadIcon className="fas fa-file-pdf" />
           <UploadText>Drop PDF file here or click to upload</UploadText>
-          <UploadSubtext>Convert PDF to interactive EPUB with selectable text</UploadSubtext>
+          <UploadSubtext>Convert a PDF to EPUB with selectable text</UploadSubtext>
+          <LimitsNote>
+            Limits before you upload: maximum {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
+          </LimitsNote>
+          {limitError && <LimitError>{limitError}</LimitError>}
           <HiddenInput
             id="pdf-upload"
             type="file"
