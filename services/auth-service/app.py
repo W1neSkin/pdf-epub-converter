@@ -156,20 +156,20 @@ async def detailed_health_check():
 @app.post("/auth/register", response_model=AuthResponse)
 async def register_user(user_data: UserRegister):
     """Register a new user"""
-    if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Auth service is not connected to the database"
         )
     try:
-        # Create user in Supabase Auth using anon key
-        auth_response = supabase_auth.auth.sign_up({
+        # Create the user with the service role. Do not use sign_up:
+        # it sends a confirmation email and hits Supabase's email rate limit.
+        auth_response = supabase_admin.auth.admin.create_user({
             "email": user_data.email,
             "password": user_data.password,
-            "options": {
-                "data": {
-                    "full_name": user_data.full_name
-                }
+            "email_confirm": True,
+            "user_metadata": {
+                "full_name": user_data.full_name
             }
         })
         
@@ -180,16 +180,6 @@ async def register_user(user_data: UserRegister):
             )
         
         user_id = auth_response.user.id
-
-        # New Supabase projects confirm email by default. The site asks
-        # users to log in right after register, so confirm the account here.
-        try:
-            supabase_admin.auth.admin.update_user_by_id(
-                user_id,
-                {"email_confirm": True}
-            )
-        except Exception as confirm_error:
-            logger.warning(f"Auto-confirm email failed: {confirm_error}")
         
         # Create user profile (bypass RLS with service role)
         profile_data = {
@@ -222,6 +212,8 @@ async def register_user(user_data: UserRegister):
             data=AuthToken(**token_data)
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Registration failed: {e}")
         error_message = str(e).lower()
