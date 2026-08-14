@@ -7,7 +7,7 @@ An online tool that converts a PDF file into an EPUB book. Users sign in, upload
 
 ## Facts
 - Price: free. A free account is required.
-- Limits: 50MB file size, 100 pages.
+- Limits: 50MB file size, 400 pages.
 - Output: EPUB with extracted text and images.
 - Library: signed-in users can store and reopen converted books.
 - Not a local business. No street address. Use it from any country in a browser.

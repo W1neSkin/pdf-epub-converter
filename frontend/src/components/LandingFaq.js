@@ -61,7 +61,7 @@ const faqs = [
   },
   {
     q: 'What are the limits?',
-    a: 'Each PDF can be up to 50MB and 100 pages.'
+    a: 'Each PDF can be up to 50MB and 400 pages.'
   },
   {
     q: 'Where can I read the EPUB?',

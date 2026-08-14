@@ -90,7 +90,7 @@ class ConverterServiceSettings(Settings):
     
     # PDF Processing
     PDF_TIMEOUT: int = 300  # 5 minutes
-    MAX_PAGES: int = 100    # Free tier limit
+    MAX_PAGES: int = 400    # Allows longer books; still capped for free hosting.
     
 class LibraryServiceSettings(Settings):
     """Library service specific settings"""

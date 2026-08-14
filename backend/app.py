@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("JWT_SECRET_KEY") or "your-super-secret-jwt-key"
 JWT_ALGORITHM = "HS256"
 MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(50 * 1024 * 1024)))  # 50MB
-MAX_PAGES = int(os.getenv("MAX_PAGES", "100"))
+MAX_PAGES = int(os.getenv("MAX_PAGES", "400"))
 
 # Utility functions
 def get_user_from_jwt(request: Request) -> Optional[Dict[str, Any]]:
