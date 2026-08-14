@@ -108,26 +108,37 @@ class AlternativePDFParser:
         return pages_data
     
     def convert_to_images(self, pdf_path: str, output_dir: str, on_progress=None) -> List[str]:
-        """Convert PDF pages to images."""
+        """Convert PDF pages to images one page at a time.
+
+        Loading every page at once runs out of RAM on long books and the
+        free host restarts. Then /api/status returns 404.
+        """
         image_paths = []
         
         try:
             print("Converting PDF pages to images...")
-            if on_progress:
-                on_progress(32, "Rendering page images...", 0, 0)
-            # Convert PDF to images
-            images = convert_from_path(pdf_path, dpi=150)  # 150 DPI for good quality
-            
             os.makedirs(output_dir, exist_ok=True)
-            total = len(images)
-            
-            for i, image in enumerate(images, 1):
+            total = len(PyPDF2.PdfReader(pdf_path).pages)
+            if on_progress:
+                on_progress(32, "Rendering page images...", 0, total)
+
+            # One page in memory at a time. Slower, but survives 300+ pages.
+            for i in range(1, total + 1):
+                images = convert_from_path(
+                    pdf_path,
+                    dpi=120,
+                    first_page=i,
+                    last_page=i,
+                )
+                if not images:
+                    continue
                 image_filename = f"page_{i:03d}.png"
                 image_path = os.path.join(output_dir, image_filename)
-                image.save(image_path, 'PNG')
+                images[0].save(image_path, 'PNG')
+                images[0].close()
                 image_paths.append(image_path)
                 print(f"Saved page {i} as {image_path}")
-                if on_progress and total:
+                if on_progress:
                     percent = 32 + int(20 * i / total)
                     on_progress(
                         percent,
@@ -155,12 +166,17 @@ class AlternativePDFParser:
         # Method 1: pdfplumber (best for text)
         print("📝 Extracting text with pdfplumber...")
         pdfplumber_data = self.extract_text_pdfplumber(pdf_path, on_progress=on_progress)
-        
-        # Method 2: PyPDF2 (fallback)
-        print("\n📝 Extracting text with PyPDF2 (fallback)...")
-        if on_progress:
-            on_progress(30, "Checking leftover pages...", 0, 0)
-        pypdf2_data = self.extract_text_pypdf2(pdf_path)
+
+        # Skip a second full read when pdfplumber already got text.
+        # A second pass on a 300-page file can kill the free host.
+        has_text = any(page.get("text") for page in pdfplumber_data)
+        if has_text:
+            pypdf2_data = []
+        else:
+            print("\n📝 Extracting text with PyPDF2 (fallback)...")
+            if on_progress:
+                on_progress(30, "Checking leftover pages...", 0, 0)
+            pypdf2_data = self.extract_text_pypdf2(pdf_path)
         
         # Method 3: Convert to images
         print("\n🖼️ Converting pages to images...")

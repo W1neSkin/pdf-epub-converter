@@ -237,7 +237,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       setProgress(5);
 
       // Convert now returns immediately. Poll until the background job finishes.
-      const maxAttempts = 150;
+      const maxAttempts = 400;
       const pollStatus = async (conversionId, attempt) => {
         const statusHeaders = { Authorization: `Bearer ${user.token}` };
         const statusResponse = await fetch(`${API_BASE_URL}/api/status/${conversionId}`, {
@@ -246,6 +246,26 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         if (!statusResponse.ok) {
           if (statusResponse.status === 502 || statusResponse.status === 503) {
             throw new Error('The converter is still starting. Wait a minute and try again.');
+          }
+          // 404 after progress usually means the host restarted and lost the job.
+          if (statusResponse.status === 404 && attempt < 4) {
+            setConversionStatus('Lost the conversion job. Checking again...');
+            setTimeout(() => {
+              pollStatus(conversionId, attempt + 1).catch((pollError) => {
+                setConversionStatus(pollError.message);
+                setProgress(0);
+                setTimeout(() => {
+                  setIsConverting(false);
+                  setConversionStatus('');
+                }, 8000);
+              });
+            }, 3000);
+            return;
+          }
+          if (statusResponse.status === 404) {
+            throw new Error(
+              'Conversion was interrupted. The server ran out of memory or restarted. Please try again.'
+            );
           }
           throw new Error(`Status check failed: ${statusResponse.status}`);
         }
