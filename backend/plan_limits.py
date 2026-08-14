@@ -8,7 +8,7 @@ money pays for a larger host (more CPU and RAM).
 
 PLANS = {
     "free": {
-        "max_pages": 400,
+        "max_pages": 50,
         "max_file_mb": 50,
     },
     # Not sold yet. Numbers are a placeholder for a future paid tier.

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import styled from 'styled-components';
-import { API_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES, countPdfPages } from '../config';
+import { API_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES } from '../config';
+import { getPdfInfo } from '../pdfInfo';
 
 const UploaderContainer = styled.div`
   display: flex;
@@ -58,6 +59,13 @@ const LimitError = styled.div`
   line-height: 1.4;
 `;
 
+const FileInfo = styled.div`
+  margin-top: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+  line-height: 1.5;
+`;
+
 const HiddenInput = styled.input`
   display: none;
 `;
@@ -111,9 +119,11 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const [downloadUrl, setDownloadUrl] = useState('');
   const [progress, setProgress] = useState(0);
   const [limitError, setLimitError] = useState('');
+  const [fileInfo, setFileInfo] = useState(null);
 
   const uploadFile = useCallback(async (file) => {
     setLimitError('');
+    setFileInfo(null);
     const isPdf = file && (
       file.type === 'application/pdf' ||
       file.name.toLowerCase().endsWith('.pdf')
@@ -131,11 +141,18 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       return;
     }
 
-    // Count pages locally so a 300+ page book is rejected before the upload.
-    const pageCount = await countPdfPages(file);
-    if (pageCount > MAX_PDF_PAGES) {
+    // Read page count in the browser with pdf-lib. Do not upload yet.
+    let info;
+    try {
+      info = await getPdfInfo(file);
+    } catch (readError) {
+      setLimitError('Could not read this PDF. Try another file.');
+      return;
+    }
+    setFileInfo(info);
+    if (info.pages > MAX_PDF_PAGES) {
       setLimitError(
-        `This PDF has ${pageCount} pages. Maximum is ${MAX_PDF_PAGES} pages.`
+        `This PDF has ${info.pages} pages. The free plan allows ${MAX_PDF_PAGES} pages.`
       );
       return;
     }
@@ -390,6 +407,12 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
             Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
             A paid plan can raise these limits later.
           </LimitsNote>
+          {fileInfo && (
+            <FileInfo>
+              {fileInfo.name}: {fileInfo.pages} pages, {fileInfo.sizeMb.toFixed(1)} MB
+              {fileInfo.title ? ` — ${fileInfo.title}` : ''}
+            </FileInfo>
+          )}
           {limitError && <LimitError>{limitError}</LimitError>}
           <HiddenInput
             id="pdf-upload"

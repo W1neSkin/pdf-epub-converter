@@ -90,7 +90,7 @@ class ConverterServiceSettings(Settings):
     
     # PDF Processing
     PDF_TIMEOUT: int = 300  # 5 minutes
-    MAX_PAGES: int = 400    # Free-plan cap. Paid tiers can raise this later.
+    MAX_PAGES: int = 50    # Free-plan cap. Paid tiers can raise this later.
     
 class LibraryServiceSettings(Settings):
     """Library service specific settings"""
