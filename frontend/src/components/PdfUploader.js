@@ -370,18 +370,39 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     }
   }, [uploadFile]);
 
-  const handleDownload = useCallback(() => {
-    if (downloadUrl) {
-      // Handle both Cloudinary URLs and local API URLs
-      if (downloadUrl.startsWith('https://res.cloudinary.com')) {
-        // Direct Cloudinary URL - download directly
-        window.open(downloadUrl, '_blank');
-      } else {
-        // Local API URL - use original method
-        window.open(downloadUrl, '_blank');
-      }
+  const handleDownload = useCallback(async () => {
+    if (!downloadUrl) {
+      return;
     }
-  }, [downloadUrl]);
+
+    // Cloudinary links are public. Relative /api/download/... is not:
+    // the browser would open it on GitHub Pages and get a 404.
+    if (downloadUrl.startsWith('http') && downloadUrl.includes('cloudinary.com')) {
+      window.open(downloadUrl, '_blank');
+      return;
+    }
+
+    const path = downloadUrl.startsWith('http')
+      ? downloadUrl
+      : `${API_BASE_URL}${downloadUrl.startsWith('/') ? downloadUrl : `/${downloadUrl}`}`;
+
+    const response = await fetch(path, {
+      headers: { Authorization: `Bearer ${user?.token || ''}` },
+    });
+    if (!response.ok) {
+      setLimitError('Could not download the EPUB. Convert the file again.');
+      return;
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = 'converted.epub';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  }, [downloadUrl, user]);
 
   const resetUploader = useCallback(() => {
     setIsConverting(false);

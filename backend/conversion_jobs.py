@@ -106,7 +106,12 @@ def run_conversion_job(
         if upload_result:
             download_url = upload_result["secure_url"]
         else:
-            download_url = f"/api/download/{conversion_id}"
+            # Absolute gateway URL. A relative /api/download path opens on GitHub Pages.
+            gateway = os.getenv(
+                "PUBLIC_API_URL",
+                "https://pdf-converter-api-gateway.onrender.com",
+            )
+            download_url = f"{gateway}/api/download/{conversion_id}"
             logger.warning("Cloudinary upload failed, using local fallback")
 
         total_words = results.get("total_words", 0)
