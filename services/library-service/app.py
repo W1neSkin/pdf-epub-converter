@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 import math
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
@@ -561,22 +562,24 @@ async def get_shared_books(
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):
     """Handle Pydantic validation errors"""
-    return ErrorResponse(
+    error = ErrorResponse(
         success=False,
         error_code="VALIDATION_ERROR",
         message="Invalid input data",
         details={"errors": exc.errors()}
     )
+    return JSONResponse(status_code=422, content=error.model_dump(mode="json"))
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions"""
-    return ErrorResponse(
+    """Return JSON so API clients can read the error message."""
+    error = ErrorResponse(
         success=False,
         error_code="LIBRARY_ERROR",
         message=exc.detail,
         details={"status_code": exc.status_code}
     )
+    return JSONResponse(status_code=exc.status_code, content=error.model_dump(mode="json"))
 
 if __name__ == "__main__":
     import uvicorn

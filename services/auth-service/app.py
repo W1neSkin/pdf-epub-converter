@@ -13,6 +13,7 @@ import asyncio
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
@@ -155,6 +156,11 @@ async def detailed_health_check():
 @app.post("/auth/register", response_model=AuthResponse)
 async def register_user(user_data: UserRegister):
     """Register a new user"""
+    if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth service is not connected to the database"
+        )
     try:
         # Create user in Supabase Auth using anon key
         auth_response = supabase_auth.auth.sign_up({
@@ -386,22 +392,24 @@ async def update_user_profile(
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):
     """Handle Pydantic validation errors"""
-    return ErrorResponse(
+    error = ErrorResponse(
         success=False,
         error_code="VALIDATION_ERROR",
         message="Invalid input data",
         details={"errors": exc.errors()}
     )
+    return JSONResponse(status_code=422, content=error.model_dump(mode="json"))
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions"""
-    return ErrorResponse(
+    """Return JSON so the frontend can show the real error instead of a network failure."""
+    error = ErrorResponse(
         success=False,
         error_code="HTTP_ERROR",
         message=exc.detail,
         details={"status_code": exc.status_code}
     )
+    return JSONResponse(status_code=exc.status_code, content=error.model_dump(mode="json"))
 
 if __name__ == "__main__":
     import uvicorn

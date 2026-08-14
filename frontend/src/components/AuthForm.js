@@ -138,7 +138,17 @@ const AuthFormComponent = ({ onAuthSuccess }) => {
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      const rawBody = await response.text();
+      let result = {};
+      try {
+        result = rawBody ? JSON.parse(rawBody) : {};
+      } catch (parseError) {
+        throw new Error(
+          response.ok
+            ? 'Server returned an invalid response'
+            : `Server error ${response.status}. The auth service may still be starting.`
+        );
+      }
 
       if (result.success) {
         if (isLogin) {
@@ -159,10 +169,15 @@ const AuthFormComponent = ({ onAuthSuccess }) => {
           setFormData({ email: formData.email, password: '', fullName: '' });
         }
       } else {
-        setError(result.message || 'Authentication failed');
+        const serverMessage = result.message || result.detail;
+        setError(
+          typeof serverMessage === 'string'
+            ? serverMessage
+            : 'Authentication failed'
+        );
       }
     } catch (error) {
-      setError('Network error. Please try again.');
+      setError(error.message || 'Network error. Please try again.');
       console.error('Auth error:', error);
     } finally {
       setLoading(false);

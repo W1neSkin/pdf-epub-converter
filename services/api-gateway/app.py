@@ -254,7 +254,9 @@ async def detailed_health_check():
     
     for service_name, service_url in SERVICES.items():
         try:
-            response = await http_client.get(f"{service_url}/", timeout=5.0)
+            response = await http_client.get(f"{service_url}/health", timeout=5.0)
+            if response.status_code == 404:
+                response = await http_client.get(f"{service_url}/", timeout=5.0)
             service_status[service_name] = "healthy" if response.status_code == 200 else "unhealthy"
         except Exception:
             service_status[service_name] = "unavailable"
