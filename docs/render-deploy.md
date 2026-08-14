@@ -45,7 +45,7 @@ Service ice   Service
    ```
    SUPABASE_URL=https://your-project-ref.supabase.co
    SUPABASE_SERVICE_KEY=your-service-key-here
-   JWT_SECRET_KEY=ffc42dc7409a15e229d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+   JWT_SECRET=your-jwt-secret-here
    PORT=8001
    DEBUG=false
    LOG_LEVEL=INFO
@@ -78,7 +78,7 @@ Service ice   Service
    SUPABASE_URL=https://your-project-ref.supabase.co
    SUPABASE_SERVICE_KEY=your-service-key-here
    CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
-   JWT_SECRET_KEY=ffc42dc7409a15e229d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+   JWT_SECRET=your-jwt-secret-here
    PORT=8002
    DEBUG=false
    LOG_LEVEL=INFO
@@ -105,7 +105,7 @@ Service ice   Service
 
 3. **Environment Variables**:
    ```
-   JWT_SECRET_KEY=ffc42dc7409a15e229d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+   JWT_SECRET=your-jwt-secret-here
    AUTH_SERVICE_URL=https://pdf-converter-auth-service.onrender.com
    CONVERTER_SERVICE_URL=https://pdf-epub-converter-api.onrender.com
    LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com
@@ -128,7 +128,7 @@ Service ice   Service
 2. **Environment** → **Add Environment Variables**:
    ```
    LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com
-   JWT_SECRET_KEY=ffc42dc7409a15e229d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+   JWT_SECRET=your-jwt-secret-here
    SUPABASE_URL=https://your-project-ref.supabase.co
    SUPABASE_SERVICE_KEY=your-service-key-here
    ```
@@ -233,7 +233,7 @@ Build Filter: services/auth-service/** or shared/**
 1. **Service Status "degraded"**: 
    - ✅ Add ALL environment variables (see environment-setup.md)
    - ✅ Verify Supabase URL and Service Key format
-   - ✅ Check JWT_SECRET_KEY is identical across services
+   - ✅ Check JWT_SECRET is identical across services
 
 2. **Inter-service communication fails**: 
    - ✅ Update service URLs in API Gateway environment

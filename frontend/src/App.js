@@ -6,6 +6,7 @@ import FileUploader from './components/FileUploader';
 import PdfUploader from './components/PdfUploader';
 import LandingPage from './components/LandingPage';
 import UserDashboard from './components/UserDashboard';
+import { API_BASE_URL } from './config';
 import './App.css';
 
 const GlobalStyle = createGlobalStyle`
@@ -139,23 +140,49 @@ function App() {
   const [user, setUser] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard'); // dashboard, convert, read
   const [epubFile, setEpubFile] = useState(null);
+  const [epubUrl, setEpubUrl] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    // Check for existing authentication on app load
     const token = localStorage.getItem('authToken');
     const userData = localStorage.getItem('userData');
-    
-    if (token && userData) {
-      try {
-        setUser(JSON.parse(userData));
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('userData');
-      }
+
+    if (!token || !userData) {
+      setAuthChecked(true);
+      return;
     }
-    setAuthChecked(true);
+
+    let parsedUser;
+    try {
+      parsedUser = JSON.parse(userData);
+    } catch (error) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+      setAuthChecked(true);
+      return;
+    }
+
+    // Confirm the token is still valid. Keep cached user if the API is waking up.
+    fetch(`${API_BASE_URL}/auth/verify`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then((response) => {
+        if (response.ok) {
+          setUser(parsedUser);
+        } else if (response.status === 401) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userData');
+          setUser(null);
+        } else {
+          setUser(parsedUser);
+        }
+      })
+      .catch(() => {
+        setUser(parsedUser);
+      })
+      .finally(() => {
+        setAuthChecked(true);
+      });
   }, []);
 
   const handleLogin = useCallback((userData) => {
@@ -169,15 +196,28 @@ function App() {
     localStorage.removeItem('userData');
     setCurrentView('dashboard');
     setEpubFile(null);
+    setEpubUrl(null);
   }, []);
 
   const handleFileSelect = useCallback((file) => {
+    setEpubUrl(null);
     setEpubFile(file);
+    setCurrentView('read');
+  }, []);
+
+  const handleOpenLibraryBook = useCallback((book) => {
+    if (!book?.cloudinary_url) {
+      alert('This book has no readable file yet');
+      return;
+    }
+    setEpubFile(null);
+    setEpubUrl(book.cloudinary_url);
     setCurrentView('read');
   }, []);
 
   const handleBackToHome = useCallback(() => {
     setEpubFile(null);
+    setEpubUrl(null);
     setCurrentView('dashboard');
   }, []);
 
@@ -215,7 +255,10 @@ function App() {
     // Authenticated user content
     switch (currentView) {
       case 'read':
-        return <EpubReader epubFile={epubFile} />;
+        if (!epubFile && !epubUrl) {
+          return <FileUploader onFileSelect={handleFileSelect} />;
+        }
+        return <EpubReader epubFile={epubFile} epubUrl={epubUrl} />;
       
       case 'convert':
         return <PdfUploader onBack={handleBackToHome} user={user} />;
@@ -280,8 +323,12 @@ function App() {
               </HeaderButton>
             </div>
 
-            {currentView === 'dashboard' && <UserDashboard user={user} />}
-            {currentView === 'read' && !epubFile && <FileUploader onFileSelect={handleFileSelect} />}
+            {currentView === 'dashboard' && (
+              <UserDashboard user={user} onOpenBook={handleOpenLibraryBook} />
+            )}
+            {currentView === 'read' && !epubFile && !epubUrl && (
+              <FileUploader onFileSelect={handleFileSelect} />
+            )}
           </div>
         );
     }

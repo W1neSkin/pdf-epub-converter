@@ -18,7 +18,7 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_KEY=eyJ...your-service-key...
 
 # JWT Configuration  
-JWT_SECRET_KEY=ffc42dc7409a15e7d29d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+JWT_SECRET=your-jwt-secret-here
 JWT_ALGORITHM=HS256
 JWT_EXPIRATION_HOURS=24
 
@@ -46,7 +46,7 @@ CLOUDINARY_API_KEY=your-api-key
 CLOUDINARY_API_SECRET=your-api-secret
 
 # JWT Configuration
-JWT_SECRET_KEY=ffc42dc7409a15e7d29d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+JWT_SECRET=your-jwt-secret-here
 
 # Library Limits (free tier)
 MAX_BOOKS_PER_USER=50
@@ -63,7 +63,7 @@ DEBUG=false
 LOG_LEVEL=INFO
 
 # JWT Configuration
-JWT_SECRET_KEY=ffc42dc7409a15e7d29d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+JWT_SECRET=your-jwt-secret-here
 
 # Service URLs (update with your actual URLs)
 AUTH_SERVICE_URL=https://pdf-converter-auth-service.onrender.com
@@ -83,7 +83,7 @@ FRONTEND_URL=https://your-username.github.io/pdf-epub-converter
 ```bash
 # Add these to your existing converter service
 LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com
-JWT_SECRET_KEY=ffc42dc7409a15e7d29d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+JWT_SECRET=your-jwt-secret-here
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_KEY=eyJ...your-service-key...
 
@@ -113,11 +113,11 @@ MAX_PAGES=100
    - `API Secret` → `CLOUDINARY_API_SECRET`
    - Format `CLOUDINARY_URL`: `cloudinary://api_key:api_secret@cloud_name`
 
-### **JWT Secret Key**
+### **JWT Secret**
 
-Use the provided key for consistency:
+Generate a strong key and use it consistently:
 ```bash
-JWT_SECRET_KEY=ffc42dc7409a15e7d29d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+JWT_SECRET=$(openssl rand -hex 32)
 ```
 
 **⚠️ Important**: This key must be **IDENTICAL** across all services!
@@ -203,7 +203,7 @@ curl https://pdf-converter-auth-service.onrender.com/health
 - ✅ Ensure Supabase project is not paused
 
 #### **JWT Token Issues**
-- ✅ Ensure JWT_SECRET_KEY is identical across all services
+- ✅ Ensure JWT_SECRET is identical across all services
 - ✅ Verify no extra spaces or characters in the key
 - ✅ Check JWT_ALGORITHM is "HS256"
 
@@ -245,7 +245,7 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_KEY=your-service-key-here
 
 # JWT
-JWT_SECRET_KEY=ffc42dc7409a15e7d29d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+JWT_SECRET=your-jwt-secret-here
 
 # Cloudinary (Optional)
 CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name

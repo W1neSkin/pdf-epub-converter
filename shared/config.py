@@ -20,7 +20,12 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
     
     # JWT Configuration
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "your-super-secret-jwt-key")
+    # Backward compatibility: accept legacy JWT_SECRET_KEY while standardizing on JWT_SECRET.
+    JWT_SECRET: str = (
+        os.getenv("JWT_SECRET")
+        or os.getenv("JWT_SECRET_KEY")
+        or "your-super-secret-jwt-key"
+    )
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24
     
@@ -102,5 +107,6 @@ class GatewayServiceSettings(Settings):
     PORT: int = int(os.getenv("PORT", "8080"))
     
     # Gateway configuration
-    TIMEOUT: int = 60  # seconds
+    TIMEOUT: int = 60  # seconds for normal API calls
+    CONVERT_TIMEOUT: int = 300  # PDF conversion can take several minutes
     MAX_RETRIES: int = 3 

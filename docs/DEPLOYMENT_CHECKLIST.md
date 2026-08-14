@@ -11,7 +11,7 @@
 ## 🔧 Environment Variables Required
 
 ### All Services Need:
-- `JWT_SECRET_KEY` (same across all services)
+- `JWT_SECRET` (same across all services)
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_KEY`
 
@@ -67,7 +67,7 @@ This will:
 
 ### Service won't start?
 - Check environment variables are set
-- Verify JWT_SECRET_KEY is identical across services
+- Verify JWT_SECRET is identical across services
 - Check logs in Render dashboard
 
 ### Database connection fails?

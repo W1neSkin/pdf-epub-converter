@@ -19,6 +19,7 @@ from supabase import create_client, Client
 import cloudinary
 import cloudinary.uploader
 from pydantic import ValidationError
+import jwt
 
 # Add shared directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
@@ -66,31 +67,35 @@ if settings.CLOUDINARY_URL:
 security = HTTPBearer(auto_error=False)
 
 # Utility Functions
-def get_user_from_headers(request: Request) -> Optional[Dict[str, Any]]:
-    """Extract user info from gateway headers"""
-    user_id = request.headers.get("X-User-ID")
-    user_email = request.headers.get("X-User-Email")
-    
-    if user_id and user_email:
-        return {
-            "user_id": user_id,
-            "email": user_email
-        }
-    return None
+def get_user_from_jwt(request: Request) -> Optional[Dict[str, Any]]:
+    """Verify Bearer JWT. Do not trust X-User-ID headers from the client."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        return {"user_id": payload["user_id"], "email": payload["email"]}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
 
 async def get_current_user(request: Request) -> Dict[str, Any]:
-    """Get current user (required)"""
-    user = get_user_from_headers(request)
+    """Get current user from a verified JWT (required)"""
+    user = get_user_from_jwt(request)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User authentication required"
         )
     return user
-
-async def get_current_user_optional(request: Request) -> Optional[Dict[str, Any]]:
-    """Get current user (optional)"""
-    return get_user_from_headers(request)
 
 def calculate_pagination(page: int, limit: int, total: int) -> Dict[str, Any]:
     """Calculate pagination metadata"""
@@ -527,16 +532,23 @@ async def get_shared_books(
         # Get shared books with book details
         offset = (pagination.page - 1) * pagination.limit
         
-        # This would require a more complex query in a real implementation
-        # For now, return a simple response
-        return {
-            "success": True,
-            "data": [],
-            "total": 0,
-            "page": pagination.page,
-            "limit": pagination.limit,
-            "message": "Shared books feature coming soon"
-        }
+        shares = supabase.table('shared_books').select("*").eq('shared_with_id', user_id).execute()
+        share_rows = shares.data or []
+        total = len(share_rows)
+        page_rows = share_rows[offset:offset + pagination.limit]
+
+        books = []
+        for share in page_rows:
+            book_result = supabase.table('user_books').select("*").eq('id', share['book_id']).execute()
+            if book_result.data:
+                books.append(UserBook(**book_result.data[0]))
+
+        pagination_meta = calculate_pagination(pagination.page, pagination.limit, total)
+        return UserBooksResponse(
+            success=True,
+            data=books,
+            **pagination_meta
+        )
         
     except Exception as e:
         logger.error(f"Failed to get shared books: {e}")

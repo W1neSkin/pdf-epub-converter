@@ -50,7 +50,7 @@ validate_env() {
     required_vars=(
         "SUPABASE_URL"
         "SUPABASE_SERVICE_KEY"
-        "JWT_SECRET_KEY"
+        "JWT_SECRET"
         "CLOUDINARY_URL"
     )
     
@@ -126,7 +126,7 @@ services:
         value: ${SUPABASE_URL}
       - key: SUPABASE_SERVICE_KEY
         sync: false
-      - key: JWT_SECRET_KEY
+      - key: JWT_SECRET
         sync: false
       - key: PORT
         value: "8001"
@@ -156,7 +156,7 @@ services:
         sync: false
       - key: CLOUDINARY_URL
         sync: false
-      - key: JWT_SECRET_KEY
+      - key: JWT_SECRET
         sync: false
       - key: PORT
         value: "8002"
@@ -180,7 +180,7 @@ services:
         - services/api-gateway/**
         - shared/**
     envVars:
-      - key: JWT_SECRET_KEY
+      - key: JWT_SECRET
         sync: false
       - key: AUTH_SERVICE_URL
         value: https://pdf-converter-auth-service.onrender.com
@@ -211,7 +211,7 @@ display_instructions() {
     echo "4. 📄 Select the generated render.yaml file"
     echo "5. 🔐 Add sensitive environment variables:"
     echo "   - SUPABASE_SERVICE_KEY"
-    echo "   - JWT_SECRET_KEY"
+    echo "   - JWT_SECRET"
     echo "   - CLOUDINARY_URL"
     echo "6. 🚀 Click 'Apply' to deploy all services"
     echo ""
@@ -227,7 +227,7 @@ display_instructions() {
     echo ""
     print_warning "Don't forget to update your existing converter service with:"
     echo "   - LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com"
-    echo "   - JWT_SECRET_KEY=[your-jwt-secret]"
+    echo "   - JWT_SECRET=[your-jwt-secret]"
     echo "   - SUPABASE_URL=[your-supabase-url]"
     echo "   - SUPABASE_SERVICE_KEY=[your-service-key]"
 }

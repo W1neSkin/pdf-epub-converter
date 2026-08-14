@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import { API_BASE_URL } from '../config';
 
 const DashboardContainer = styled.div`
   width: 100%;
@@ -128,12 +129,11 @@ const SectionTitle = styled.h2`
   }
 `;
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://pdf-converter-api-gateway.onrender.com';
-
-const UserDashboard = ({ user }) => {
+const UserDashboard = ({ user, onOpenBook }) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [books, setBooks] = useState([]);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -264,6 +264,25 @@ const UserDashboard = ({ user }) => {
         Your Books ({books.length})
       </SectionTitle>
 
+      {books.length > 0 && (
+        <input
+          type="text"
+          placeholder="Search books..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            width: '100%',
+            maxWidth: '400px',
+            marginBottom: '1rem',
+            padding: '0.75rem 1rem',
+            borderRadius: '0.5rem',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            background: 'rgba(255, 255, 255, 0.1)',
+            color: 'white'
+          }}
+        />
+      )}
+
       {books.length === 0 ? (
         <EmptyState>
           <i className="fas fa-book-open"></i>
@@ -274,7 +293,16 @@ const UserDashboard = ({ user }) => {
         </EmptyState>
       ) : (
         <BooksGrid>
-          {books.map((book) => (
+          {books
+            .filter((book) => {
+              const query = search.trim().toLowerCase();
+              if (!query) return true;
+              return (
+                (book.title || '').toLowerCase().includes(query) ||
+                (book.original_filename || '').toLowerCase().includes(query)
+              );
+            })
+            .map((book) => (
             <BookCard key={book.id}>
               <BookTitle>{book.title}</BookTitle>
               <BookInfo>
@@ -285,6 +313,11 @@ const UserDashboard = ({ user }) => {
                 <div><strong>Created:</strong> {formatDate(book.created_at)}</div>
               </BookInfo>
               <BookActions>
+                {book.cloudinary_url && (
+                  <ActionButton onClick={() => onOpenBook && onOpenBook(book)}>
+                    <i className="fas fa-book-open"></i> Read
+                  </ActionButton>
+                )}
                 <ActionButton onClick={() => downloadBook(book)}>
                   <i className="fas fa-download"></i> Download
                 </ActionButton>

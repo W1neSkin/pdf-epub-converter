@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
+import { API_BASE_URL } from '../config';
 
 const AuthContainer = styled.div`
   background: rgba(255, 255, 255, 0.1);
@@ -96,8 +97,6 @@ const SuccessMessage = styled.div`
   border-radius: 0.5rem;
   text-align: center;
 `;
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://pdf-converter-api-gateway.onrender.com';
 
 const AuthFormComponent = ({ onAuthSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);

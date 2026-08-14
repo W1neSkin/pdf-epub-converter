@@ -15,8 +15,10 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request, Response, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 import jwt
+import time
+from collections import defaultdict
 
 # Add shared directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
@@ -61,6 +63,9 @@ SERVICES = {
 # HTTP client for inter-service communication
 http_client = httpx.AsyncClient(timeout=settings.TIMEOUT)
 
+# Simple in-memory rate limit for convert uploads (per client IP).
+_rate_hits = defaultdict(list)
+
 # Utility Functions
 def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify JWT token"""
@@ -100,11 +105,27 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     payload = verify_jwt_token(credentials.credentials)
     return payload
 
+def enforce_rate_limit(request: Request):
+    """Limit convert requests per IP using config RATE_LIMIT_* values."""
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    window = settings.RATE_LIMIT_WINDOW
+    limit = settings.RATE_LIMIT_REQUESTS
+    recent = [t for t in _rate_hits[client_ip] if now - t < window]
+    if len(recent) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please wait and try again."
+        )
+    recent.append(now)
+    _rate_hits[client_ip] = recent
+
 async def forward_request(
     service_name: str,
     path: str,
     request: Request,
-    user: Optional[Dict[str, Any]] = None
+    user: Optional[Dict[str, Any]] = None,
+    timeout: Optional[float] = None
 ) -> Response:
     """Forward request to microservice"""
     service_url = SERVICES.get(service_name)
@@ -121,11 +142,18 @@ async def forward_request(
     headers = dict(request.headers)
     # Remove host header to avoid conflicts
     headers.pop("host", None)
+    # Never trust client-supplied user headers; only set them from a verified JWT.
+    headers.pop("x-user-id", None)
+    headers.pop("X-User-ID", None)
+    headers.pop("x-user-email", None)
+    headers.pop("X-User-Email", None)
     
     # Add user context if available
     if user:
         headers["X-User-ID"] = user["user_id"]
         headers["X-User-Email"] = user["email"]
+
+    request_timeout = timeout or settings.TIMEOUT
     
     try:
         # Forward the request
@@ -133,7 +161,8 @@ async def forward_request(
             response = await http_client.get(
                 target_url,
                 headers=headers,
-                params=request.query_params
+                params=request.query_params,
+                timeout=request_timeout
             )
         elif request.method == "POST":
             if request.headers.get("content-type", "").startswith("multipart/form-data"):
@@ -152,7 +181,8 @@ async def forward_request(
                     target_url,
                     headers={k: v for k, v in headers.items() if k.lower() != "content-type"},
                     files=files,
-                    data=data
+                    data=data,
+                    timeout=request_timeout
                 )
             else:
                 # Handle JSON/other content
@@ -160,20 +190,23 @@ async def forward_request(
                 response = await http_client.post(
                     target_url,
                     headers=headers,
-                    content=body
+                    content=body,
+                    timeout=request_timeout
                 )
         elif request.method == "PUT":
             body = await request.body()
             response = await http_client.put(
                 target_url,
                 headers=headers,
-                content=body
+                content=body,
+                timeout=request_timeout
             )
         elif request.method == "DELETE":
             response = await http_client.delete(
                 target_url,
                 headers=headers,
-                params=request.query_params
+                params=request.query_params,
+                timeout=request_timeout
             )
         else:
             raise HTTPException(
@@ -243,19 +276,26 @@ async def auth_proxy(path: str, request: Request):
     """Proxy requests to auth service"""
     return await forward_request("auth", f"/auth/{path}", request)
 
-# Converter routes (auth optional for now, will be required later)
+# Converter routes require a logged-in user
 @app.api_route("/api/convert", methods=["POST"])
-async def convert_proxy(request: Request, user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
+async def convert_proxy(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     """Proxy PDF conversion requests to converter service"""
-    return await forward_request("converter", "/api/convert", request, user)
+    enforce_rate_limit(request)
+    return await forward_request(
+        "converter",
+        "/api/convert",
+        request,
+        user,
+        timeout=settings.CONVERT_TIMEOUT
+    )
 
 @app.api_route("/api/download/{file_id}", methods=["GET"])
-async def download_proxy(file_id: str, request: Request, user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
+async def download_proxy(file_id: str, request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     """Proxy download requests to converter service"""
     return await forward_request("converter", f"/api/download/{file_id}", request, user)
 
 @app.api_route("/api/status/{conversion_id}", methods=["GET"])
-async def status_proxy(conversion_id: str, request: Request, user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
+async def status_proxy(conversion_id: str, request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     """Proxy status requests to converter service"""
     return await forward_request("converter", f"/api/status/{conversion_id}", request, user)
 
@@ -274,13 +314,14 @@ async def converter_health(request: Request):
 # Error handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions"""
-    return ErrorResponse(
+    """Handle HTTP exceptions with a consistent JSON envelope."""
+    error = ErrorResponse(
         success=False,
         error_code="GATEWAY_ERROR",
         message=exc.detail,
         details={"status_code": exc.status_code, "path": str(request.url)}
     )
+    return JSONResponse(status_code=exc.status_code, content=error.model_dump(mode="json"))
 
 # Startup and shutdown events
 @app.on_event("startup")

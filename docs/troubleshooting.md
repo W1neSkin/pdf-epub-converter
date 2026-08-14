@@ -108,7 +108,7 @@ FROM python:3.11-slim
 # Required for all services
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_KEY=your-service-key-here
-JWT_SECRET_KEY=your-jwt-secret-here
+JWT_SECRET=your-jwt-secret-here
 ```
 
 ### **Inter-Service Communication Issues**
@@ -151,7 +151,7 @@ const API_BASE_URL = 'https://pdf-converter-api-gateway.onrender.com';
 #### **Solution**: Ensure consistent JWT secret across all services
 ```bash
 # Must be IDENTICAL across all services
-JWT_SECRET_KEY=ffc42dc7409a15e7d29d6f9b86c2ab5dd8d641f75d0c54bd5e408836230126013
+JWT_SECRET=your-jwt-secret-here
 ```
 
 ## 🗄️ **Database Issues**
@@ -230,7 +230,7 @@ cd services/auth-service
 docker build -f Dockerfile -t test-service ../../
 
 # Test with environment variables
-docker run -e SUPABASE_URL=test -e JWT_SECRET_KEY=test test-service
+docker run -e SUPABASE_URL=test -e JWT_SECRET=test test-service
 ```
 
 ## 📞 **Getting Help**

@@ -7,6 +7,7 @@ import os
 import json
 import zipfile
 import shutil
+import tempfile
 from datetime import datetime
 from typing import List, Dict
 import uuid
@@ -347,11 +348,8 @@ h1, h2 {
         """Generate EPUB file from HTML pages."""
         print(f"📚 Generating EPUB: {output_filename}")
         
-        # Create temporary directory for EPUB structure
-        temp_dir = "temp_epub"
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-        os.makedirs(temp_dir)
+        # Unique temp dir so two conversions cannot overwrite each other
+        temp_dir = tempfile.mkdtemp(prefix="epub_")
         
         try:
             # Find HTML files
