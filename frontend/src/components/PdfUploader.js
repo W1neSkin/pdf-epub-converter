@@ -203,7 +203,6 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         headers['Authorization'] = `Bearer ${user.token}`;
       }
 
-      // Free Render can drop the first request. Retry instead of a raw NetworkError.
       const sendConvert = () => {
         const upload = new FormData();
         upload.append('file', file);
@@ -214,9 +213,26 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         });
       };
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      // 429 here is Cloudflare/Render, not our app. Retry instead of a fake limit error.
       const isRetryable = (status) =>
         status === 429 || status === 502 || status === 503 || status === 504;
+
+      // Wake the sleeping converter with a small GET. Do not POST the PDF yet.
+      setConversionStatus('Starting the converter...');
+      setProgress(0);
+      for (let wakeTry = 1; wakeTry <= 8; wakeTry += 1) {
+        try {
+          const wake = await fetch(`${API_BASE_URL}/converter/health`);
+          if (wake.ok) {
+            break;
+          }
+        } catch (wakeError) {
+          // Keep waiting. A cold Render host often drops the first calls.
+        }
+        if (wakeTry === 8) {
+          throw new Error('The converter did not start. Try again in a minute.');
+        }
+        await sleep(5000);
+      }
       const isNetworkError = (err) => {
         const text = String(err && err.message ? err.message : err).toLowerCase();
         return (
@@ -228,20 +244,20 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       };
 
       let response = null;
-      for (let wakeTry = 1; wakeTry <= 6; wakeTry += 1) {
+      for (let sendTry = 1; sendTry <= 3; sendTry += 1) {
         try {
           response = await sendConvert();
           if (!isRetryable(response.status)) {
             break;
           }
-          if (wakeTry === 6) {
+          if (sendTry === 3) {
             break;
           }
-          setConversionStatus('Server is busy. Sending the file again...');
+          setConversionStatus('Starting the converter...');
           setProgress(0);
           await sleep(response.status === 429 ? 15000 : 5000);
         } catch (err) {
-          if (!isNetworkError(err) || wakeTry === 6) {
+          if (!isNetworkError(err) || sendTry === 3) {
             throw new Error(
               isNetworkError(err)
                 ? 'Could not reach the converter. The file will be sent again.'
