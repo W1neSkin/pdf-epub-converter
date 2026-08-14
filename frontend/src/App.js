@@ -39,7 +39,7 @@ const Header = styled.header`
   justify-content: space-between;
 `;
 
-const Logo = styled.h1`
+const Logo = styled.div`
   color: white;
   font-size: 1.8rem;
   font-weight: 300;

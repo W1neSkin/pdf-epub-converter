@@ -4,41 +4,116 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#667eea" />
+    <meta name="robots" content="index, follow" />
+    <title>Free PDF to EPUB Converter — Online, in the Browser</title>
     <meta
       name="description"
-      content="Convert PDF files to interactive EPUB books. Upload a PDF, get selectable text, and keep your books in a personal library."
+      content="Free online PDF to EPUB converter. Upload a PDF (up to 50MB, 100 pages), get an EPUB with selectable text, and keep books in a personal library. Works in the browser."
+    />
+    <meta
+      name="keywords"
+      content="PDF to EPUB, convert PDF to EPUB, free EPUB converter, online PDF converter, Kindle EPUB"
     />
     <link rel="canonical" href="https://w1neskin.github.io/pdf-epub-converter/" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>PDF to EPUB Converter</title>
+    <!-- Open Graph: Google, Slack, Telegram, AI crawlers that read social cards -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="PDF to EPUB Converter" />
+    <meta property="og:title" content="Free PDF to EPUB Converter" />
+    <meta
+      property="og:description"
+      content="Upload a PDF and download an EPUB you can read on Kindle, Apple Books, or in the browser."
+    />
+    <meta property="og:url" content="https://w1neskin.github.io/pdf-epub-converter/" />
+    <meta property="og:image" content="https://w1neskin.github.io/pdf-epub-converter/logo512.png" />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Free PDF to EPUB Converter" />
+    <meta
+      name="twitter:description"
+      content="Free online tool to convert PDF files to EPUB. 50MB and 100-page limit. Sign in to save books."
+    />
+
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Structured data for Google and AI search (GEO). Facts only, no fake stats. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "name": "PDF to EPUB Converter",
+          "url": "https://w1neskin.github.io/pdf-epub-converter/",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Any",
+          "browserRequirements": "Requires JavaScript",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "description": "Free web app that converts PDF files to EPUB. Maximum file size 50MB and 100 pages. Create a free account to convert and store books."
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is this PDF to EPUB converter?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "It is a free website that turns a PDF file into an EPUB book. You upload a PDF, wait for conversion, then download the EPUB or read it in the browser."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is the PDF to EPUB converter free?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. You need a free account. There is no paid plan on the site today."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What are the file limits?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The PDF can be up to 50MB and 100 pages."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Where can I read the EPUB?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "In this site's reader, or in apps that open EPUB files such as Apple Books, Google Play Books, and many Kindle workflows that accept EPUB."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+      <h1>Free PDF to EPUB Converter</h1>
+      <p>
+        This is a free online tool that converts PDF files to EPUB books.
+        Enable JavaScript to upload a file. Limits: 50MB, 100 pages. A free
+        account is required.
+      </p>
+      <p>
+        Site:
+        <a href="https://w1neskin.github.io/pdf-epub-converter/">
+          https://w1neskin.github.io/pdf-epub-converter/
+        </a>
+      </p>
+    </noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 </html>

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import AuthForm from './AuthForm';
+import LandingFaq from './LandingFaq';
 
 const fadeIn = keyframes`
   from {
@@ -319,68 +320,44 @@ const CloseButton = styled.button`
   }
 `;
 
-const AnimatedCounter = ({ end, duration = 2000, delay = 0 }) => {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      let start = 0;
-      const increment = end / (duration / 50);
-      const counter = setInterval(() => {
-        start += increment;
-        if (start >= end) {
-          setCount(end);
-          clearInterval(counter);
-        } else {
-          setCount(Math.floor(start));
-        }
-      }, 50);
-    }, delay);
-
-    return () => clearTimeout(timer);
-  }, [end, duration, delay]);
-
-  return count.toLocaleString();
-};
-
 const LandingPage = ({ onAuthSuccess }) => {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const features = [
     {
-      icon: 'fas fa-magic',
-      title: 'Smart PDF Conversion',
-      description: 'Advanced AI-powered conversion that preserves formatting, text positioning, and image quality for professional results.',
+      icon: 'fas fa-file-pdf',
+      title: 'PDF to EPUB',
+      description: 'Upload a PDF. The site extracts text and images and builds an EPUB you can download.',
       delay: '0.2s'
     },
     {
       icon: 'fas fa-book-open',
-      title: 'Interactive Reading',
-      description: 'Full text selection, copy functionality, and responsive design that works perfectly on all devices.',
+      title: 'Read in the browser',
+      description: 'Open the EPUB here, select text, and flip pages. No extra app required.',
       delay: '0.4s'
     },
     {
       icon: 'fas fa-cloud',
-      title: 'Personal Library',
-      description: 'Secure cloud storage for all your conversions with advanced search, organization, and download capabilities.',
+      title: 'Personal library',
+      description: 'Signed-in users keep converted books in a private library and can open them again later.',
       delay: '0.6s'
     },
     {
-      icon: 'fas fa-shield-alt',
-      title: 'Enterprise Security',
-      description: 'Bank-level encryption, secure authentication, and private storage ensure your documents stay protected.',
+      icon: 'fas fa-user-lock',
+      title: 'Account required',
+      description: 'Conversion and the library need a free login. Files are stored with your account, not as a public dump.',
       delay: '0.8s'
     },
     {
-      icon: 'fas fa-rocket',
-      title: 'Lightning Fast',
-      description: 'Optimized processing pipeline delivers converted EPUBs in seconds, not minutes.',
+      icon: 'fas fa-ruler',
+      title: 'Clear limits',
+      description: 'Maximum 50MB and 100 pages per PDF. That keeps the free service usable.',
       delay: '1.0s'
     },
     {
       icon: 'fas fa-mobile-alt',
-      title: 'Cross-Platform',
-      description: 'Works seamlessly on desktop, tablet, and mobile. Compatible with Kindle, Apple Books, and more.',
+      title: 'Works on phones',
+      description: 'Use it in a desktop or phone browser. The EPUB also opens in Apple Books and similar readers.',
       delay: '1.2s'
     }
   ];
@@ -394,8 +371,8 @@ const LandingPage = ({ onAuthSuccess }) => {
     },
     {
       number: 2,
-      title: 'AI Processing',
-      description: 'Our advanced AI extracts text and images',
+      title: 'Convert',
+      description: 'Text and images are extracted and packed into an EPUB',
       delay: '0.4s'
     },
     {
@@ -410,11 +387,11 @@ const LandingPage = ({ onAuthSuccess }) => {
     <LandingContainer>
       <HeroSection>
         <HeroTitle>
-          Transform PDFs into Interactive EPUBs
+          Free PDF to EPUB Converter
         </HeroTitle>
         <HeroSubtitle>
-          The most advanced PDF to EPUB converter with AI-powered text extraction, 
-          perfect formatting preservation, and instant cloud library management.
+          Upload a PDF and get an EPUB with selectable text. Read it in the
+          browser or download it. Free account. Up to 50MB and 100 pages.
         </HeroSubtitle>
         <CTAButton onClick={() => setShowAuthModal(true)}>
           <i className="fas fa-rocket" style={{ marginRight: '0.5rem' }}></i>
@@ -425,28 +402,20 @@ const LandingPage = ({ onAuthSuccess }) => {
       <StatsSection>
         <StatsGrid>
           <StatItem delay="0.2s">
-            <StatNumber delay="0.5s">
-              <AnimatedCounter end={50000} delay={500} />+
-            </StatNumber>
-            <StatLabel>PDFs Converted</StatLabel>
+            <StatNumber>50</StatNumber>
+            <StatLabel>MB max file size</StatLabel>
           </StatItem>
           <StatItem delay="0.4s">
-            <StatNumber delay="0.7s">
-              <AnimatedCounter end={12000} delay={700} />+
-            </StatNumber>
-            <StatLabel>Happy Users</StatLabel>
+            <StatNumber>100</StatNumber>
+            <StatLabel>pages max</StatLabel>
           </StatItem>
           <StatItem delay="0.6s">
-            <StatNumber delay="0.9s">
-              <AnimatedCounter end={99} delay={900} />%
-            </StatNumber>
-            <StatLabel>Success Rate</StatLabel>
+            <StatNumber>Free</StatNumber>
+            <StatLabel>account to convert</StatLabel>
           </StatItem>
           <StatItem delay="0.8s">
-            <StatNumber delay="1.1s">
-              <AnimatedCounter end={24} delay={1100} />/7
-            </StatNumber>
-            <StatLabel>Always Available</StatLabel>
+            <StatNumber>EPUB</StatNumber>
+            <StatLabel>file you can download</StatLabel>
           </StatItem>
         </StatsGrid>
       </StatsSection>
@@ -479,9 +448,11 @@ const LandingPage = ({ onAuthSuccess }) => {
       <div style={{ textAlign: 'center', marginTop: '4rem' }}>
         <CTAButton onClick={() => setShowAuthModal(true)}>
           <i className="fas fa-user-plus" style={{ marginRight: '0.5rem' }}></i>
-          Join Thousands of Users - Sign Up Free
+          Create a free account
         </CTAButton>
       </div>
+
+      <LandingFaq />
 
       {showAuthModal && (
         <AuthModal onClick={(e) => e.target === e.currentTarget && setShowAuthModal(false)}>
