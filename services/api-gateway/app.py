@@ -173,7 +173,11 @@ async def forward_request(
                 
                 for key, value in form_data.items():
                     if hasattr(value, 'read'):  # File upload
-                        files[key] = (value.filename, await value.read(), value.content_type)
+                        # Keep PDF uploads as application/pdf. Some browsers send octet-stream.
+                        content_type = value.content_type
+                        if value.filename and str(value.filename).lower().endswith('.pdf'):
+                            content_type = 'application/pdf'
+                        files[key] = (value.filename, await value.read(), content_type)
                     else:
                         data[key] = value
                 
