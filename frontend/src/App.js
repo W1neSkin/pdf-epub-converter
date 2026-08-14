@@ -206,12 +206,13 @@ function App() {
   }, []);
 
   const handleOpenLibraryBook = useCallback((book) => {
-    if (!book?.cloudinary_url) {
+    if (!book?.id) {
       alert('This book has no readable file yet');
       return;
     }
+    // Load through the library API so GitHub Pages / CORS / auth all work.
     setEpubFile(null);
-    setEpubUrl(book.cloudinary_url);
+    setEpubUrl(`${API_BASE_URL}/library/books/${book.id}/file`);
     setCurrentView('read');
   }, []);
 
@@ -258,7 +259,7 @@ function App() {
         if (!epubFile && !epubUrl) {
           return <FileUploader onFileSelect={handleFileSelect} />;
         }
-        return <EpubReader epubFile={epubFile} epubUrl={epubUrl} />;
+        return <EpubReader epubFile={epubFile} epubUrl={epubUrl} token={user?.token} />;
       
       case 'convert':
         return <PdfUploader onBack={handleBackToHome} user={user} />;

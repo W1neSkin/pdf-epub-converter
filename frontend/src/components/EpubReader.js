@@ -68,7 +68,7 @@ const LoadingSpinner = styled.div`
   }
 `;
 
-const EpubReader = ({ epubFile, epubUrl }) => {
+const EpubReader = ({ epubFile, epubUrl, token }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [epubData, setEpubData] = useState(null);
@@ -172,7 +172,11 @@ const EpubReader = ({ epubFile, epubUrl }) => {
       if (epubUrl) {
         try {
           setIsLoading(true);
-          const response = await fetch(epubUrl);
+          const headers = {};
+          if (token) {
+            headers.Authorization = `Bearer ${token}`;
+          }
+          const response = await fetch(epubUrl, { headers });
           if (!response.ok) {
             throw new Error('Could not download EPUB');
           }
@@ -186,7 +190,7 @@ const EpubReader = ({ epubFile, epubUrl }) => {
       }
     };
     loadSource();
-  }, [epubFile, epubUrl, parseEpub]);
+  }, [epubFile, epubUrl, token, parseEpub]);
 
   const handlePageChange = useCallback((pageIndex) => {
     if (pageIndex >= 0 && pageIndex < pages.length) {

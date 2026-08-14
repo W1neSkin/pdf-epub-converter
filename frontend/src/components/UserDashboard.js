@@ -202,11 +202,29 @@ const UserDashboard = ({ user, onOpenBook }) => {
     }
   };
 
-  const downloadBook = (book) => {
-    if (book.cloudinary_url) {
-      window.open(book.cloudinary_url, '_blank');
-    } else {
+  const downloadBook = async (book) => {
+    if (!book?.id) {
       alert('Download link not available');
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/library/books/${book.id}/file`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      if (!response.ok) {
+        throw new Error('download failed');
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `${book.title || 'book'}.epub`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      alert('Could not download this book. Convert it again.');
     }
   };
 

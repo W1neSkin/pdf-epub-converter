@@ -13,7 +13,8 @@ from uuid import UUID, uuid4
 import math
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+import urllib.request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
@@ -229,6 +230,48 @@ async def get_book(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve book"
         )
+
+@app.get("/library/books/{book_id}/file")
+async def download_book_file(
+    book_id: UUID,
+    request: Request,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Stream the EPUB through this API. The reader cannot load Cloudinary or
+    /api/download links from GitHub Pages (404 / CORS / missing JWT)."""
+    book_response = await get_book(book_id, user)
+    file_url = book_response.data.cloudinary_url
+    if not file_url:
+        raise HTTPException(status_code=404, detail="Book file is missing")
+
+    if not file_url.startswith("http"):
+        gateway = os.getenv(
+            "PUBLIC_API_URL",
+            "https://pdf-converter-api-gateway.onrender.com",
+        )
+        file_url = f"{gateway}{file_url if file_url.startswith('/') else '/' + file_url}"
+
+    headers = {}
+    auth = request.headers.get("Authorization")
+    if auth and "cloudinary.com" not in file_url:
+        headers["Authorization"] = auth
+
+    try:
+        req = urllib.request.Request(file_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = resp.read()
+    except Exception as exc:
+        logger.error(f"Failed to fetch book file: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not download the EPUB file"
+        )
+
+    return Response(
+        content=data,
+        media_type="application/epub+zip",
+        headers={"Content-Disposition": "inline; filename=book.epub"},
+    )
 
 @app.post("/library/books", response_model=UserBookResponse)
 async def create_book(
