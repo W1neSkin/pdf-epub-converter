@@ -214,7 +214,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         });
       };
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      const isWaking = (status) => status === 502 || status === 503 || status === 504;
+      // 429 here is Cloudflare/Render, not our app. Retry instead of a fake limit error.
+      const isRetryable = (status) =>
+        status === 429 || status === 502 || status === 503 || status === 504;
       const isNetworkError = (err) => {
         const text = String(err && err.message ? err.message : err).toLowerCase();
         return (
@@ -226,48 +228,35 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       };
 
       let response = null;
-      for (let wakeTry = 1; wakeTry <= 2; wakeTry += 1) {
+      for (let wakeTry = 1; wakeTry <= 6; wakeTry += 1) {
         try {
           response = await sendConvert();
-          if (!isWaking(response.status)) {
+          if (!isRetryable(response.status)) {
             break;
           }
-          if (wakeTry === 2) {
-            throw new Error('The converter is still starting. Wait a minute and try again.');
+          if (wakeTry === 6) {
+            break;
           }
-          setConversionStatus('Server is starting. Please wait...');
+          setConversionStatus('Server is busy. Sending the file again...');
           setProgress(0);
-          await sleep(5000);
+          await sleep(response.status === 429 ? 15000 : 5000);
         } catch (err) {
-          if (err.message && err.message.includes('still starting')) {
-            throw err;
-          }
-          if (!isNetworkError(err) || wakeTry === 2) {
+          if (!isNetworkError(err) || wakeTry === 6) {
             throw new Error(
               isNetworkError(err)
-                ? 'Could not reach the converter. Wait a minute and try again.'
+                ? 'Could not reach the converter. The file will be sent again.'
                 : err.message
             );
           }
-          setConversionStatus('Connection lost. Trying again...');
+          setConversionStatus('Connection lost. Sending the file again...');
           setProgress(0);
           await sleep(5000);
         }
       }
 
-      if (!response.ok) {
-        if (isWaking(response.status)) {
-          throw new Error('The converter is still starting. Wait a minute and try again.');
-        }
-        if (response.status === 429) {
-          let retryMessage = '';
-          try {
-            const errBody = await response.json();
-            retryMessage = errBody.message || errBody.detail || '';
-          } catch (parseError) {
-            retryMessage = '';
-          }
-          throw new Error(retryMessage || 'Please wait a minute and try once more.');
+      if (!response || !response.ok) {
+        if (!response || isRetryable(response.status)) {
+          throw new Error('Server is busy after several tries.');
         }
         let serverMessage = '';
         try {
@@ -297,8 +286,21 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           headers: statusHeaders
         });
         if (!statusResponse.ok) {
-          if (statusResponse.status === 502 || statusResponse.status === 503) {
-            throw new Error('The converter is still starting. Wait a minute and try again.');
+          if (
+            statusResponse.status === 429 ||
+            statusResponse.status === 502 ||
+            statusResponse.status === 503
+          ) {
+            setConversionStatus('Server is busy. Checking again...');
+            setTimeout(() => {
+              pollStatus(conversionId, attempt + 1).catch((pollError) => {
+                setIsConverting(false);
+                setProgress(0);
+                setConversionStatus('');
+                setLimitError(pollError.message);
+              });
+            }, 8000);
+            return;
           }
           // 404 after progress usually means the host restarted and lost the job.
           if (statusResponse.status === 404 && attempt < 4) {
@@ -357,12 +359,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
             setConversionStatus('');
             setLimitError(pollError.message);
           });
-        }, 2000);
+        }, 4000);
       };
 
       await pollStatus(result.conversion_id, 1);
     } catch (error) {
       console.error('Upload error:', error);
+      lastUpload.current = { key: '', at: 0 };
       setIsConverting(false);
       setProgress(0);
       setConversionStatus('');
