@@ -367,7 +367,8 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           <UploadText>Drop PDF file here or click to upload</UploadText>
           <UploadSubtext>Convert a PDF to EPUB with selectable text</UploadSubtext>
           <LimitsNote>
-            Limits before you upload: maximum {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
+            Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
+            A paid plan can raise these limits later.
           </LimitsNote>
           {limitError && <LimitError>{limitError}</LimitError>}
           <HiddenInput

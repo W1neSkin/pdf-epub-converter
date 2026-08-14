@@ -10,6 +10,7 @@ import logging
 import jwt
 from PyPDF2 import PdfReader
 from conversion_jobs import read_status, run_conversion_job, write_status
+from plan_limits import limits_for
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,8 +19,10 @@ logger = logging.getLogger(__name__)
 # Environment variables
 JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("JWT_SECRET_KEY") or "your-super-secret-jwt-key"
 JWT_ALGORITHM = "HS256"
-MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(50 * 1024 * 1024)))  # 50MB
-MAX_PAGES = int(os.getenv("MAX_PAGES", "400"))
+# Free-plan defaults. Paid tiers can pass a different plan later.
+_FREE = limits_for("free")
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(_FREE["max_file_mb"] * 1024 * 1024)))
+MAX_PAGES = int(os.getenv("MAX_PAGES", str(_FREE["max_pages"])))
 
 # Utility functions
 def get_user_from_jwt(request: Request) -> Optional[Dict[str, Any]]:

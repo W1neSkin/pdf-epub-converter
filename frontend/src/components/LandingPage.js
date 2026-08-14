@@ -351,7 +351,7 @@ const LandingPage = ({ onAuthSuccess }) => {
     {
       icon: 'fas fa-ruler',
       title: 'Clear limits',
-      description: 'Maximum 50MB and 400 pages per PDF. That keeps the free service usable.',
+      description: 'Free plan: 50MB and 400 pages. Paid plans can raise this when we move to a larger host.',
       delay: '1.0s'
     },
     {
@@ -391,7 +391,7 @@ const LandingPage = ({ onAuthSuccess }) => {
         </HeroTitle>
         <HeroSubtitle>
           Upload a PDF and get an EPUB with selectable text. Read it in the
-          browser or download it. Free account. Up to 50MB and 400 pages.
+          browser or download it. Free plan: up to 50MB and 400 pages.
         </HeroSubtitle>
         <CTAButton onClick={() => setShowAuthModal(true)}>
           <i className="fas fa-rocket" style={{ marginRight: '0.5rem' }}></i>

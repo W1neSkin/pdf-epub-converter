@@ -61,7 +61,7 @@ const faqs = [
   },
   {
     q: 'What are the limits?',
-    a: 'Each PDF can be up to 50MB and 400 pages.'
+    a: 'On the free plan each PDF can be up to 50MB and 400 pages. A paid plan can raise those limits later.'
   },
   {
     q: 'Where can I read the EPUB?',
