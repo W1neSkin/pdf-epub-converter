@@ -264,41 +264,46 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
 
       const retryableStatuses = new Set([429, 502, 503, 504]);
 
-      // Warmup with a few short tries to reduce first-request 429/503.
-      const wakeAttempts = 3;
-      for (let wakeTry = 1; wakeTry <= wakeAttempts; wakeTry += 1) {
+      // Warmup with a timed loop because Render cold-start can take ~30+ seconds.
+      const wakeDeadline = Date.now() + 75_000;
+      let wakeReady = false;
+      while (Date.now() < wakeDeadline) {
         try {
           const wakeResponse = await fetch(`${API_BASE_URL}/converter/health`, { signal });
           if (wakeResponse.ok) {
+            wakeReady = true;
             break;
           }
-          const canRetry = retryableStatuses.has(wakeResponse.status) && wakeTry < wakeAttempts;
+          const canRetry = retryableStatuses.has(wakeResponse.status) && Date.now() < wakeDeadline;
           if (!canRetry) {
             break;
           }
-          setConversionStatus('Starting converter... Waiting for server...');
-          await waitWithAbort(wakeResponse.status === 429 ? 6000 : 3000, signal);
+          setConversionStatus('Starting converter... Server is waking up...');
+          await waitWithAbort(wakeResponse.status === 429 ? 8000 : 4000, signal);
         } catch (error) {
           if (error.name === 'AbortError' || cancelledRef.current) {
             return;
           }
-          const canRetry = wakeTry < wakeAttempts;
+          const canRetry = Date.now() < wakeDeadline;
           if (!canRetry) {
             break;
           }
-          setConversionStatus('Starting converter... Waiting for server...');
-          await waitWithAbort(3000, signal);
+          setConversionStatus('Starting converter... Server is waking up...');
+          await waitWithAbort(4000, signal);
         }
       }
       if (cancelledRef.current) {
         return;
+      }
+      if (!wakeReady) {
+        setConversionStatus('Converter is still waking up. Trying upload...');
       }
 
       setConversionStatus(action === 'csv' ? 'Uploading PDF for table extraction...' : 'Uploading PDF...');
       const upload = new FormData();
       upload.append('file', file);
       const endpoint = action === 'csv' ? '/api/extract-tables' : '/api/convert';
-      const uploadAttempts = 3;
+      const uploadAttempts = 5;
       let response = null;
       for (let uploadTry = 1; uploadTry <= uploadAttempts; uploadTry += 1) {
         try {
@@ -332,7 +337,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
               ? 'Server is busy. Retrying upload...'
               : 'Server is waking up. Retrying upload...'
           );
-          await waitWithAbort(response.status === 429 ? 7000 : 4000, signal);
+          await waitWithAbort(response.status === 429 ? 8000 : 4000, signal);
           continue;
         }
 
