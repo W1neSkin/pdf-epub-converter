@@ -159,6 +159,36 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const abortRef = useRef(null);
   const actionRef = useRef('epub');
 
+  const waitWithAbort = useCallback((ms, signal) => {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        const err = new Error('aborted');
+        err.name = 'AbortError';
+        reject(err);
+        return;
+      }
+      let onAbort = null;
+      const timeoutId = setTimeout(() => {
+        if (signal && onAbort) {
+          signal.removeEventListener('abort', onAbort);
+        }
+        resolve();
+      }, ms);
+      onAbort = () => {
+        clearTimeout(timeoutId);
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        }
+        const err = new Error('aborted');
+        err.name = 'AbortError';
+        reject(err);
+      };
+      if (signal) {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }, []);
+
   const cancelUpload = useCallback((showMessage = true) => {
     cancelledRef.current = true;
     if (abortRef.current) {
@@ -232,12 +262,32 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         onEpubGenerated(null);
       }
 
-      // Warmup ping. Even if it fails, we still try one real upload.
-      try {
-        await fetch(`${API_BASE_URL}/converter/health`, { signal });
-      } catch (error) {
-        if (error.name === 'AbortError' || cancelledRef.current) {
-          return;
+      const retryableStatuses = new Set([429, 502, 503, 504]);
+
+      // Warmup with a few short tries to reduce first-request 429/503.
+      const wakeAttempts = 3;
+      for (let wakeTry = 1; wakeTry <= wakeAttempts; wakeTry += 1) {
+        try {
+          const wakeResponse = await fetch(`${API_BASE_URL}/converter/health`, { signal });
+          if (wakeResponse.ok) {
+            break;
+          }
+          const canRetry = retryableStatuses.has(wakeResponse.status) && wakeTry < wakeAttempts;
+          if (!canRetry) {
+            break;
+          }
+          setConversionStatus('Starting converter... Waiting for server...');
+          await waitWithAbort(wakeResponse.status === 429 ? 6000 : 3000, signal);
+        } catch (error) {
+          if (error.name === 'AbortError' || cancelledRef.current) {
+            return;
+          }
+          const canRetry = wakeTry < wakeAttempts;
+          if (!canRetry) {
+            break;
+          }
+          setConversionStatus('Starting converter... Waiting for server...');
+          await waitWithAbort(3000, signal);
         }
       }
       if (cancelledRef.current) {
@@ -248,14 +298,44 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       const upload = new FormData();
       upload.append('file', file);
       const endpoint = action === 'csv' ? '/api/extract-tables' : '/api/convert';
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${user.token}` },
-        body: upload,
-        signal,
-      });
+      const uploadAttempts = 3;
+      let response = null;
+      for (let uploadTry = 1; uploadTry <= uploadAttempts; uploadTry += 1) {
+        try {
+          response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${user.token}` },
+            body: upload,
+            signal,
+          });
+        } catch (error) {
+          if (error.name === 'AbortError' || cancelledRef.current) {
+            return;
+          }
+          const canRetry = uploadTry < uploadAttempts;
+          if (!canRetry) {
+            throw error;
+          }
+          setConversionStatus('Network issue. Retrying upload...');
+          await waitWithAbort(4000, signal);
+          continue;
+        }
 
-      if (!response.ok) {
+        if (response.ok) {
+          break;
+        }
+
+        const canRetry = retryableStatuses.has(response.status) && uploadTry < uploadAttempts;
+        if (canRetry) {
+          setConversionStatus(
+            response.status === 429
+              ? 'Server is busy. Retrying upload...'
+              : 'Server is waking up. Retrying upload...'
+          );
+          await waitWithAbort(response.status === 429 ? 7000 : 4000, signal);
+          continue;
+        }
+
         let serverMessage = '';
         try {
           const body = await response.json();
@@ -263,7 +343,14 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         } catch (parseError) {
           serverMessage = '';
         }
+        if (!serverMessage && response.status === 429) {
+          serverMessage = 'Server is busy or waking up. Wait a bit and try again.';
+        }
         throw new Error(serverMessage || `Could not convert this file (${response.status})`);
+      }
+
+      if (!response || !response.ok) {
+        throw new Error('Could not upload this file.');
       }
 
       const result = await response.json();
@@ -349,7 +436,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       setLimitError(error.message || 'Conversion failed.');
       lastUpload.current = { key: '', at: 0 };
     }
-  }, [onEpubGenerated, user]);
+  }, [onEpubGenerated, user, waitWithAbort]);
 
   useEffect(() => {
     const preventBrowserDrop = (event) => {
