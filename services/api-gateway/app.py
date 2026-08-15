@@ -60,7 +60,7 @@ SERVICES = {
 
 # HTTP client for inter-service communication
 http_client = httpx.AsyncClient(timeout=settings.TIMEOUT)
-RENDER_WAKE_RETRY_ATTEMPTS = int(os.getenv("RENDER_WAKE_RETRY_ATTEMPTS", "12"))
+RENDER_WAKE_RETRY_ATTEMPTS = int(os.getenv("RENDER_WAKE_RETRY_ATTEMPTS", "30"))
 RENDER_WAKE_RETRY_DELAY_SECONDS = float(os.getenv("RENDER_WAKE_RETRY_DELAY_SECONDS", "6"))
 
 

@@ -262,13 +262,14 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         onEpubGenerated(null);
       }
 
-      const retryableStatuses = new Set([429, 502, 503, 504]);
+      // 429 is mostly handled by API Gateway now; keep only one client retry for wake-up edge cases.
+      const retryableStatuses = new Set([502, 503, 504]);
 
       setConversionStatus(action === 'csv' ? 'Uploading PDF for table extraction...' : 'Uploading PDF...');
       const upload = new FormData();
       upload.append('file', file);
       const endpoint = action === 'csv' ? '/api/extract-tables' : '/api/convert';
-      const uploadAttempts = 6;
+      const uploadAttempts = 2;
       let response = null;
       for (let uploadTry = 1; uploadTry <= uploadAttempts; uploadTry += 1) {
         try {
@@ -295,10 +296,17 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           break;
         }
 
-        const canRetry = retryableStatuses.has(response.status) && uploadTry < uploadAttempts;
+        const isWakeLimit = response.status === 429;
+        const canRetry =
+          ((isWakeLimit && uploadTry === 1) || retryableStatuses.has(response.status)) &&
+          uploadTry < uploadAttempts;
         if (canRetry) {
-          setConversionStatus('Server is waking up. Please wait...');
-          await waitWithAbort(response.status === 429 ? 10000 : 4000, signal);
+          setConversionStatus(
+            isWakeLimit
+              ? 'Server is still waking up. Trying once more...'
+              : 'Server is waking up. Please wait...'
+          );
+          await waitWithAbort(isWakeLimit ? 12000 : 4000, signal);
           continue;
         }
 
