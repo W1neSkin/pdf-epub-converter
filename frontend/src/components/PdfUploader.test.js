@@ -24,9 +24,6 @@ describe('PdfUploader', () => {
 
     global.fetch = jest.fn((url) => {
       const requestUrl = String(url);
-      if (requestUrl.includes('/converter/health')) {
-        return Promise.resolve({ ok: true });
-      }
       if (requestUrl.includes('/api/convert')) {
         return Promise.resolve({
           ok: true,
@@ -71,7 +68,7 @@ describe('PdfUploader', () => {
 
     global.fetch = jest.fn((url, options = {}) => {
       const requestUrl = String(url);
-      if (requestUrl.includes('/converter/health')) {
+      if (requestUrl.includes('/api/convert')) {
         return new Promise((resolve, reject) => {
           if (options.signal) {
             options.signal.addEventListener('abort', () => {
@@ -92,7 +89,7 @@ describe('PdfUploader', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByText(/Starting converter/i)).toBeInTheDocument();
+      expect(screen.getByText(/Uploading PDF/i)).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
@@ -102,7 +99,7 @@ describe('PdfUploader', () => {
     });
 
     const convertCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('/api/convert'));
-    expect(convertCalls).toHaveLength(0);
+    expect(convertCalls).toHaveLength(1);
   });
 
   test('extracts tables in CSV mode with dedicated endpoint', async () => {
@@ -115,9 +112,6 @@ describe('PdfUploader', () => {
 
     global.fetch = jest.fn((url) => {
       const requestUrl = String(url);
-      if (requestUrl.includes('/converter/health')) {
-        return Promise.resolve({ ok: true });
-      }
       if (requestUrl.includes('/api/extract-tables')) {
         return Promise.resolve({
           ok: true,

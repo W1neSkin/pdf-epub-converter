@@ -60,6 +60,55 @@ SERVICES = {
 
 # HTTP client for inter-service communication
 http_client = httpx.AsyncClient(timeout=settings.TIMEOUT)
+RENDER_WAKE_RETRY_ATTEMPTS = int(os.getenv("RENDER_WAKE_RETRY_ATTEMPTS", "12"))
+RENDER_WAKE_RETRY_DELAY_SECONDS = float(os.getenv("RENDER_WAKE_RETRY_DELAY_SECONDS", "6"))
+
+
+def is_hibernate_rate_limited(response: httpx.Response) -> bool:
+    """True when Render rejects requests while a sleeping service wakes up."""
+    if response.status_code != 429:
+        return False
+    routing = response.headers.get("x-render-routing", "")
+    return "hibernate-rate-limited" in routing.lower()
+
+
+async def send_with_render_retry(
+    service_name: str,
+    method: str,
+    target_url: str,
+    request_timeout: float,
+    **kwargs: Any,
+) -> httpx.Response:
+    """Retry requests when Render returns hibernate-rate-limited 429."""
+    response: Optional[httpx.Response] = None
+    for attempt in range(1, RENDER_WAKE_RETRY_ATTEMPTS + 1):
+        response = await http_client.request(
+            method,
+            target_url,
+            timeout=request_timeout,
+            **kwargs,
+        )
+        if not is_hibernate_rate_limited(response):
+            return response
+
+        if attempt == RENDER_WAKE_RETRY_ATTEMPTS:
+            logger.error(
+                "Service %s stayed hibernate-rate-limited after %s attempts",
+                service_name,
+                RENDER_WAKE_RETRY_ATTEMPTS,
+            )
+            return response
+
+        logger.warning(
+            "Service %s is waking up (attempt %s/%s), retrying in %.1fs",
+            service_name,
+            attempt,
+            RENDER_WAKE_RETRY_ATTEMPTS,
+            RENDER_WAKE_RETRY_DELAY_SECONDS,
+        )
+        await asyncio.sleep(RENDER_WAKE_RETRY_DELAY_SECONDS)
+
+    return response  # Unreachable, kept for type safety.
 
 # Utility Functions
 def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
@@ -138,11 +187,13 @@ async def forward_request(
     try:
         # Forward the request
         if request.method == "GET":
-            response = await http_client.get(
-                target_url,
+            response = await send_with_render_retry(
+                service_name=service_name,
+                method="GET",
+                target_url=target_url,
+                request_timeout=request_timeout,
                 headers=headers,
                 params=request.query_params,
-                timeout=request_timeout
             )
         elif request.method == "POST":
             if request.headers.get("content-type", "").startswith("multipart/form-data"):
@@ -162,39 +213,47 @@ async def forward_request(
                         data[key] = value
                 
                 # Drop the original body headers. httpx builds a new multipart body.
-                response = await http_client.post(
-                    target_url,
+                response = await send_with_render_retry(
+                    service_name=service_name,
+                    method="POST",
+                    target_url=target_url,
+                    request_timeout=request_timeout,
                     headers={
                         k: v for k, v in headers.items()
                         if k.lower() not in ("content-type", "content-length")
                     },
                     files=files,
                     data=data,
-                    timeout=request_timeout
                 )
             else:
                 # Handle JSON/other content
                 body = await request.body()
-                response = await http_client.post(
-                    target_url,
+                response = await send_with_render_retry(
+                    service_name=service_name,
+                    method="POST",
+                    target_url=target_url,
+                    request_timeout=request_timeout,
                     headers=headers,
                     content=body,
-                    timeout=request_timeout
                 )
         elif request.method == "PUT":
             body = await request.body()
-            response = await http_client.put(
-                target_url,
+            response = await send_with_render_retry(
+                service_name=service_name,
+                method="PUT",
+                target_url=target_url,
+                request_timeout=request_timeout,
                 headers=headers,
                 content=body,
-                timeout=request_timeout
             )
         elif request.method == "DELETE":
-            response = await http_client.delete(
-                target_url,
+            response = await send_with_render_retry(
+                service_name=service_name,
+                method="DELETE",
+                target_url=target_url,
+                request_timeout=request_timeout,
                 headers=headers,
                 params=request.query_params,
-                timeout=request_timeout
             )
         else:
             raise HTTPException(
