@@ -206,6 +206,10 @@ function App() {
     setEpubUrl(null);
   }, []);
 
+  const handleSessionExpired = useCallback(() => {
+    handleLogout();
+  }, [handleLogout]);
+
   const handleFileSelect = useCallback((file) => {
     setEpubUrl(null);
     setEpubFile(file);
@@ -221,7 +225,7 @@ function App() {
 
   const renderAuthenticatedContent = () => {
     if (currentView === VIEW_CONVERT) {
-      return <PdfUploader onBack={goDashboard} user={user} />;
+      return <PdfUploader onBack={goDashboard} user={user} onSessionExpired={handleSessionExpired} />;
     }
     if (currentView === VIEW_READ) {
       if (!epubFile && !epubUrl) {

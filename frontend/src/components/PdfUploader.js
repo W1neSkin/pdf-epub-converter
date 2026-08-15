@@ -139,7 +139,7 @@ const ProgressFill = styled.div`
   transition: width 0.25s ease;
 `;
 
-const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
+const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [conversionStatus, setConversionStatus] = useState('');
@@ -158,6 +158,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const cancelledRef = useRef(false);
   const abortRef = useRef(null);
   const actionRef = useRef('epub');
+  const AUTH_EXPIRED = 'AUTH_EXPIRED';
 
   const waitWithAbort = useCallback((ms, signal) => {
     return new Promise((resolve, reject) => {
@@ -296,6 +297,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           break;
         }
 
+        if (response.status === 401) {
+          throw new Error(AUTH_EXPIRED);
+        }
+
         const isWakeLimit = response.status === 429;
         const canRetry =
           ((isWakeLimit && uploadTry === 1) || retryableStatuses.has(response.status)) &&
@@ -344,6 +349,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         });
 
         if (!statusResponse.ok) {
+          if (statusResponse.status === 401) {
+            throw new Error(AUTH_EXPIRED);
+          }
           if ([429, 502, 503].includes(statusResponse.status)) {
             setConversionStatus('Server is busy. Checking again...');
             setTimeout(() => pollStatus(conversionId, attempt + 1), 5000);
@@ -403,6 +411,14 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       if (cancelledRef.current || error.name === 'AbortError') {
         return;
       }
+      if (error.message === AUTH_EXPIRED) {
+        cancelUpload(false);
+        setLimitError('Session expired. Please log in again.');
+        if (onSessionExpired) {
+          onSessionExpired();
+        }
+        return;
+      }
       console.error(error);
       setIsConverting(false);
       setProgress(0);
@@ -410,7 +426,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       setLimitError(error.message || 'Conversion failed.');
       lastUpload.current = { key: '', at: 0 };
     }
-  }, [onEpubGenerated, user, waitWithAbort]);
+  }, [cancelUpload, onEpubGenerated, onSessionExpired, user, waitWithAbort]);
 
   useEffect(() => {
     const preventBrowserDrop = (event) => {
@@ -487,6 +503,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       headers: { Authorization: `Bearer ${user?.token || ''}` },
     });
     if (!response.ok) {
+      if (response.status === 401) {
+        setLimitError('Session expired. Please log in again.');
+        if (onSessionExpired) {
+          onSessionExpired();
+        }
+        return;
+      }
       setLimitError('Could not download this file. Try again.');
       return;
     }
@@ -500,7 +523,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     link.click();
     link.remove();
     URL.revokeObjectURL(objectUrl);
-  }, [downloadName, downloadUrl, user]);
+  }, [downloadName, downloadUrl, onSessionExpired, user]);
 
   return (
     <Wrapper>

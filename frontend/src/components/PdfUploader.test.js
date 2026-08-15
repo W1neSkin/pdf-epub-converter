@@ -148,4 +148,44 @@ describe('PdfUploader', () => {
     const csvCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('/api/extract-tables'));
     expect(csvCalls).toHaveLength(1);
   });
+
+  test('handles expired token and requests re-login', async () => {
+    getPdfInfo.mockResolvedValue({
+      name: 'sample.pdf',
+      pages: 1,
+      sizeMb: 0.1,
+      title: '',
+    });
+
+    global.fetch = jest.fn((url) => {
+      const requestUrl = String(url);
+      if (requestUrl.includes('/api/convert')) {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          json: async () => ({ message: 'Token has expired' }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    const onSessionExpired = jest.fn();
+    const { container } = render(
+      <PdfUploader
+        user={user}
+        onSessionExpired={onSessionExpired}
+        onEpubGenerated={jest.fn()}
+        onBack={jest.fn()}
+      />
+    );
+    const input = container.querySelector('input[type="file"]');
+    const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(onSessionExpired).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.getByText(/Session expired\. Please log in again\./i)).toBeInTheDocument();
+  });
 });
