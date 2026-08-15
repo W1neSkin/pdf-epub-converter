@@ -6,6 +6,7 @@ frontend polls /api/status. This avoids gateway timeouts on large PDFs.
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, Optional
 
 import httpx
@@ -81,24 +82,23 @@ def run_conversion_job(
         processor = AlternativePDFParser()
         results = processor.parse_pdf(pdf_path, output_dir, on_progress=report)
 
-        page_count = len(results.get("pages", []))
-        report(55, "Building interactive pages...", pages=page_count)
+        pages_data = results.get("pages", [])
+        page_count = len(pages_data)
+        report(55, "Building EPUB pages...", pages=page_count)
         html_generator = HTMLPageGenerator()
-        html_files = html_generator.generate_html_pages(
-            pdf_path=pdf_path,
-            image_dir=output_dir,
-            output_dir=output_dir,
-        )
+        html_files = html_generator.generate_html_pages(pages_data=pages_data, output_dir=output_dir)
         if not html_files:
             raise Exception("No pages generated from PDF")
 
         report(80, "Packaging EPUB...", pages=page_count)
         epub_path = os.path.join(output_dir, f"{conversion_id}.epub")
+        language = _detect_language(results.get("total_text", ""))
         EPUBGenerator().generate_epub(
             html_dir=output_dir,
             image_dir=output_dir,
             output_filename=epub_path,
             title=f"Converted PDF - {filename}",
+            language=language,
         )
 
         report(90, "Saving EPUB...", pages=page_count)
@@ -124,6 +124,7 @@ def run_conversion_job(
             conversion_id=conversion_id,
             user=user,
             auth_header=auth_header,
+            language=language,
         )
 
         if os.path.exists(pdf_path):
@@ -165,6 +166,7 @@ def _save_to_library(
     conversion_id: str,
     user: Dict[str, Any],
     auth_header: str,
+    language: str,
 ) -> Optional[str]:
     """Best-effort library save. Conversion still succeeds if this fails."""
     title = filename.replace(".pdf", "")
@@ -179,7 +181,7 @@ def _save_to_library(
         "metadata": {
             "title": title,
             "description": "Converted from PDF",
-            "language": "en",
+            "language": language,
         },
         "is_public": False,
     }
@@ -203,3 +205,19 @@ def _save_to_library(
     except Exception as exc:
         logger.error("Error saving book to library: %s", exc)
     return None
+
+
+def _detect_language(text: str) -> str:
+    """
+    Very small language heuristic for metadata.
+
+    The test file contains Cyrillic. Marking it as "ru" helps readers select
+    better fonts/hyphenation than hardcoding "en".
+    """
+    if not text:
+        return "en"
+    cyrillic = len(re.findall(r"[А-Яа-яЁёІіЎў]", text))
+    latin = len(re.findall(r"[A-Za-z]", text))
+    if cyrillic > latin:
+        return "ru"
+    return "en"

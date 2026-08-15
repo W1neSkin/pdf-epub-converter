@@ -1,188 +1,111 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import styled from 'styled-components';
 
-const UploaderContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2rem;
-  max-width: 600px;
+const Wrapper = styled.section`
   width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+`;
+
+const Card = styled.div`
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1.2rem;
 `;
 
 const DropZone = styled.div`
-  border: 3px dashed ${props => props.isDragActive ? '#ffd700' : 'rgba(255, 255, 255, 0.3)'};
-  border-radius: 1rem;
-  padding: 3rem 2rem;
+  border: 2px dashed ${(props) => (props.$active ? '#facc15' : 'rgba(255, 255, 255, 0.35)')};
+  border-radius: 0.9rem;
+  background: ${(props) => (props.$active ? 'rgba(250, 204, 21, 0.12)' : 'rgba(255, 255, 255, 0.03)')};
   text-align: center;
-  background: ${props => props.isDragActive ? 'rgba(255, 215, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'};
-  backdrop-filter: blur(10px);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  width: 100%;
-
-  &:hover {
-    border-color: #ffd700;
-    background: rgba(255, 215, 0, 0.1);
-    transform: translateY(-2px);
-  }
-`;
-
-const UploadIcon = styled.i`
-  font-size: 4rem;
-  color: #ffd700;
-  margin-bottom: 1rem;
-`;
-
-const UploadText = styled.div`
-  color: white;
-  font-size: 1.2rem;
-  margin-bottom: 0.5rem;
-`;
-
-const UploadSubtext = styled.div`
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
+  padding: 2rem 1rem;
 `;
 
 const HiddenInput = styled.input`
   display: none;
 `;
 
-const SampleSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  padding: 2rem;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  width: 100%;
-`;
-
-const SampleTitle = styled.h3`
-  color: white;
-  font-weight: 300;
-  margin-bottom: 0.5rem;
-`;
-
-const SampleButton = styled.button`
-  background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+const ChooseButton = styled.button`
+  margin-top: 1rem;
   border: none;
-  color: white;
-  padding: 0.8rem 1.5rem;
-  border-radius: 0.5rem;
+  border-radius: 0.65rem;
+  background: #facc15;
+  color: #111827;
+  font-weight: 700;
+  min-height: 2.8rem;
+  padding: 0.4rem 1.1rem;
   cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+`;
 
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(238, 90, 36, 0.4);
-  }
+const ErrorText = styled.div`
+  margin-top: 0.8rem;
+  color: #fecaca;
 `;
 
 const FileUploader = ({ onFileSelect }) => {
   const [isDragActive, setIsDragActive] = useState(false);
-  const fileInputRef = React.useRef();
+  const [error, setError] = useState('');
+  const inputRef = useRef(null);
 
-  const handleDrag = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+  const selectFile = useCallback((file) => {
+    if (!file) return;
+    const isEpub = file.type === 'application/epub+zip' || file.name.toLowerCase().endsWith('.epub');
+    if (!isEpub) {
+      setError('Please choose an EPUB file.');
+      return;
+    }
+    setError('');
+    onFileSelect(file);
+  }, [onFileSelect]);
+
+  const handleDrag = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.type === 'dragenter' || event.type === 'dragover') {
       setIsDragActive(true);
-    } else if (e.type === "dragleave") {
+    } else if (event.type === 'dragleave') {
       setIsDragActive(false);
     }
   }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDrop = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
     setIsDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type === 'application/epub+zip' || file.name.endsWith('.epub')) {
-        onFileSelect(file);
-      } else {
-        alert('Please select a valid EPUB file.');
-      }
-    }
-  }, [onFileSelect]);
-
-  const handleChange = useCallback((e) => {
-    e.preventDefault();
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.type === 'application/epub+zip' || file.name.endsWith('.epub')) {
-        onFileSelect(file);
-      } else {
-        alert('Please select a valid EPUB file.');
-      }
-    }
-  }, [onFileSelect]);
-
-  const handleClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const loadSampleEpub = async () => {
-    try {
-      // Load the sample EPUB from frontend public folder
-      const response = await fetch('/sample1.epub');
-      if (response.ok) {
-        const blob = await response.blob();
-        const file = new File([blob], 'sample1.epub', { type: 'application/epub+zip' });
-        onFileSelect(file);
-      } else {
-        alert('Sample EPUB not found. Please upload your own EPUB file.');
-      }
-    } catch (error) {
-      alert('Could not load sample EPUB. Please upload your own EPUB file.');
-    }
-  };
+    const file = event.dataTransfer?.files?.[0];
+    selectFile(file);
+  }, [selectFile]);
 
   return (
-    <UploaderContainer>
-      <DropZone
-        isDragActive={isDragActive}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-        onClick={handleClick}
-      >
-        <UploadIcon className="fas fa-cloud-upload-alt" />
-        <UploadText>
-          {isDragActive ? "Drop your EPUB file here" : "Drop an EPUB file here or click to browse"}
-        </UploadText>
-        <UploadSubtext>
-          Supports .epub files
-        </UploadSubtext>
-        <HiddenInput
-          ref={fileInputRef}
-          type="file"
-          accept=".epub,application/epub+zip"
-          onChange={handleChange}
-        />
-      </DropZone>
-
-      <SampleSection>
-        <SampleTitle>Or try our sample EPUB</SampleTitle>
-        <SampleButton onClick={loadSampleEpub}>
-          <i className="fas fa-file-alt"></i>
-          Load Sample Document
-        </SampleButton>
-      </SampleSection>
-    </UploaderContainer>
+    <Wrapper>
+      <Card>
+        <DropZone
+          $active={isDragActive}
+          onDragEnter={handleDrag}
+          onDragOver={handleDrag}
+          onDragLeave={handleDrag}
+          onDrop={handleDrop}
+        >
+          <i className="fas fa-book-open" style={{ fontSize: '2.6rem', color: '#facc15' }} aria-hidden="true"></i>
+          <h3 style={{ margin: '0.7rem 0 0.35rem' }}>Open an EPUB file</h3>
+          <p style={{ color: 'rgba(255,255,255,0.8)' }}>
+            Drop an EPUB here or choose a file manually.
+          </p>
+          <ChooseButton type="button" onClick={() => inputRef.current?.click()}>
+            Choose EPUB
+          </ChooseButton>
+          <HiddenInput
+            ref={inputRef}
+            type="file"
+            accept=".epub,application/epub+zip"
+            onChange={(event) => selectFile(event.target.files?.[0])}
+          />
+          {error && <ErrorText>{error}</ErrorText>}
+        </DropZone>
+      </Card>
+    </Wrapper>
   );
 };
 
-export default FileUploader; 
+export default FileUploader;

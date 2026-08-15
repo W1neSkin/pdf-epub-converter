@@ -1,137 +1,123 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { API_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES } from '../config';
 import { getPdfInfo } from '../pdfInfo';
 
-const UploaderContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2rem;
-  max-width: 600px;
+const Wrapper = styled.section`
+  width: 100%;
+  max-width: 760px;
   margin: 0 auto;
 `;
 
-const DropZone = styled.div`
-  border: 3px dashed ${props => props.$isDragOver ? '#ffd700' : 'rgba(255, 255, 255, 0.3)'};
-  border-radius: 1rem;
-  padding: 3rem;
-  text-align: center;
-  background: ${props => props.$isDragOver ? 'rgba(255, 215, 0, 0.1)' : 'rgba(255, 255, 255, 0.05)'};
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  width: 100%;
-  min-height: 280px;
+const HeaderRow = styled.div`
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  user-select: none;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
 `;
 
-const UploadIcon = styled.i`
-  font-size: 4rem;
-  color: #ffd700;
-  margin-bottom: 1rem;
-`;
-
-const UploadText = styled.div`
+const BackButton = styled.button`
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.08);
   color: white;
-  font-size: 1.2rem;
-  margin-bottom: 0.5rem;
+  padding: 0.7rem 0.95rem;
+  cursor: pointer;
+  font-weight: 600;
 `;
 
-const UploadSubtext = styled.div`
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
+const Card = styled.div`
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.08);
+  padding: clamp(1rem, 2vw, 1.5rem);
 `;
 
-const LimitsNote = styled.div`
-  margin-top: 1rem;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.95rem;
+const DropZone = styled.div`
+  border: 2px dashed ${(props) => (props.$active ? '#facc15' : 'rgba(255, 255, 255, 0.35)')};
+  border-radius: 0.9rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  background: ${(props) => (props.$active ? 'rgba(250, 204, 21, 0.12)' : 'rgba(255, 255, 255, 0.03)')};
+`;
+
+const Icon = styled.i`
+  font-size: 2.6rem;
+  color: #facc15;
+  margin-bottom: 0.7rem;
+`;
+
+const MainText = styled.div`
+  font-size: 1.1rem;
+  margin-bottom: 0.35rem;
+`;
+
+const SubText = styled.div`
+  color: rgba(255, 255, 255, 0.78);
   line-height: 1.5;
 `;
 
-const LimitError = styled.div`
-  margin-top: 0.75rem;
-  color: #fecaca;
-  font-size: 0.95rem;
-  line-height: 1.4;
-`;
-
-const FileInfo = styled.div`
-  margin-top: 0.75rem;
+const Info = styled.div`
+  margin-top: 0.9rem;
   color: rgba(255, 255, 255, 0.85);
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.92rem;
+`;
+
+const ErrorText = styled.div`
+  margin-top: 0.85rem;
+  color: #fecaca;
 `;
 
 const HiddenInput = styled.input`
   display: none;
 `;
 
-const ChooseButton = styled.button`
-  margin-top: 1.25rem;
-  background: linear-gradient(135deg, #ffd700, #ffed4e);
-  color: #333;
+const PrimaryButton = styled.button`
+  margin-top: 1rem;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
-  font-weight: bold;
+  border-radius: 0.65rem;
+  background: #facc15;
+  color: #111827;
+  font-weight: 700;
+  min-height: 2.8rem;
+  padding: 0.45rem 1.1rem;
   cursor: pointer;
 `;
 
-const CancelButton = styled.button`
-  margin-top: 1rem;
+const GhostButton = styled.button`
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 0.65rem;
   background: transparent;
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  padding: 0.5rem 1.25rem;
-  border-radius: 0.5rem;
+  min-height: 2.8rem;
+  padding: 0.45rem 1rem;
   cursor: pointer;
+  font-weight: 600;
 `;
 
-const ConversionStatus = styled.div`
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  color: white;
-  text-align: center;
-  width: 100%;
-  max-width: 400px;
+const ButtonsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-top: 1rem;
 `;
 
 const ProgressBar = styled.div`
-  width: 100%;
-  height: 6px;
+  height: 0.45rem;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-  margin: 1rem 0;
   overflow: hidden;
+  margin: 0.85rem 0 0.35rem;
 `;
 
 const ProgressFill = styled.div`
   height: 100%;
-  background: linear-gradient(90deg, #ffd700, #ffed4e);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-  width: ${props => props.progress}%;
-`;
-
-const DownloadButton = styled.button`
-  background: linear-gradient(135deg, #ffd700, #ffed4e);
-  color: #333;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 0.5rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-  
-  &:hover {
-    transform: translateY(-2px);
-  }
+  width: ${(props) => props.$value}%;
+  background: linear-gradient(90deg, #facc15, #fde047);
+  transition: width 0.25s ease;
 `;
 
 const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
@@ -142,17 +128,29 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const [progress, setProgress] = useState(0);
   const [limitError, setLimitError] = useState('');
   const [fileInfo, setFileInfo] = useState(null);
+
   const dragDepth = useRef(0);
   const fileInputRef = useRef(null);
   const lastUpload = useRef({ key: '', at: 0 });
   const cancelledRef = useRef(false);
   const abortRef = useRef(null);
 
-  const uploadFile = useCallback(async (file) => {
-    if (!file) {
-      return;
+  const cancelUpload = useCallback((showMessage = true) => {
+    cancelledRef.current = true;
+    if (abortRef.current) {
+      abortRef.current.abort();
     }
-    // Drop can fire twice (zone + window, or drop + file input change).
+    setIsConverting(false);
+    setProgress(0);
+    setConversionStatus('');
+    if (showMessage) {
+      setLimitError('Upload cancelled.');
+    }
+  }, []);
+
+  const uploadFile = useCallback(async (file) => {
+    if (!file) return;
+
     const uploadKey = `${file.name}:${file.size}:${file.lastModified}`;
     const now = Date.now();
     if (lastUpload.current.key === uploadKey && now - lastUpload.current.at < 1500) {
@@ -162,10 +160,8 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
 
     setLimitError('');
     setFileInfo(null);
-    const isPdf = file && (
-      file.type === 'application/pdf' ||
-      file.name.toLowerCase().endsWith('.pdf')
-    );
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     if (!isPdf) {
       setLimitError('Please choose a PDF file.');
       return;
@@ -173,28 +169,23 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
 
     const sizeMb = file.size / (1024 * 1024);
     if (sizeMb > MAX_PDF_MB) {
-      setLimitError(
-        `This file is ${sizeMb.toFixed(1)} MB. Maximum is ${MAX_PDF_MB} MB.`
-      );
+      setLimitError(`This file is ${sizeMb.toFixed(1)} MB. Maximum is ${MAX_PDF_MB} MB.`);
       return;
     }
 
-    // Read page count in the browser with pdf-lib. Do not upload yet.
     let info;
     try {
       info = await getPdfInfo(file);
-    } catch (readError) {
+    } catch (error) {
       setLimitError('Could not read this PDF. Try another file.');
       return;
     }
+
     setFileInfo(info);
     if (info.pages > MAX_PDF_PAGES) {
-      setLimitError(
-        `This PDF has ${info.pages} pages. The free plan allows ${MAX_PDF_PAGES} pages.`
-      );
+      setLimitError(`This PDF has ${info.pages} pages. Maximum is ${MAX_PDF_PAGES}.`);
       return;
     }
-
     if (!user?.token) {
       setLimitError('Please log in first.');
       return;
@@ -202,29 +193,23 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
 
     cancelledRef.current = false;
     abortRef.current = new AbortController();
-    const signal = abortRef.current.signal;
+    const { signal } = abortRef.current;
 
-    setIsConverting(true);
     setDownloadUrl('');
-    setConversionStatus('Uploading PDF...');
+    setIsConverting(true);
     setProgress(0);
+    setConversionStatus('Starting converter...');
 
     try {
       if (onEpubGenerated) {
         onEpubGenerated(null);
       }
 
-      const headers = {};
-      if (user?.token) {
-        headers['Authorization'] = `Bearer ${user.token}`;
-      }
-
-      // One wake ping, then one upload. No silent retry loop.
-      setConversionStatus('Starting the converter...');
+      // Warmup ping. Even if it fails, we still try one real upload.
       try {
         await fetch(`${API_BASE_URL}/converter/health`, { signal });
-      } catch (wakeError) {
-        if (wakeError.name === 'AbortError' || cancelledRef.current) {
+      } catch (error) {
+        if (error.name === 'AbortError' || cancelledRef.current) {
           return;
         }
       }
@@ -237,7 +222,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       upload.append('file', file);
       const response = await fetch(`${API_BASE_URL}/api/convert`, {
         method: 'POST',
-        headers,
+        headers: { Authorization: `Bearer ${user.token}` },
         body: upload,
         signal,
       });
@@ -245,8 +230,8 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       if (!response.ok) {
         let serverMessage = '';
         try {
-          const errBody = await response.json();
-          serverMessage = errBody.message || errBody.detail || '';
+          const body = await response.json();
+          serverMessage = body.message || body.detail || '';
         } catch (parseError) {
           serverMessage = '';
         }
@@ -254,84 +239,48 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       }
 
       const result = await response.json();
-
       if (!result.success || !result.conversion_id) {
         throw new Error(result.message || 'Conversion failed');
       }
 
-      // Upload is done. From here the bar follows the server, not fake percents.
-      setConversionStatus('Uploaded. Conversion started...');
       setProgress(5);
+      setConversionStatus('Uploaded. Conversion started...');
 
-      // Convert now returns immediately. Poll until the background job finishes.
-      const maxAttempts = 400;
       const pollStatus = async (conversionId, attempt) => {
-        if (cancelledRef.current) {
-          return;
-        }
-        const statusHeaders = { Authorization: `Bearer ${user.token}` };
+        if (cancelledRef.current) return;
+
         const statusResponse = await fetch(`${API_BASE_URL}/api/status/${conversionId}`, {
-          headers: statusHeaders,
+          headers: { Authorization: `Bearer ${user.token}` },
           signal,
         });
+
         if (!statusResponse.ok) {
-          if (
-            statusResponse.status === 429 ||
-            statusResponse.status === 502 ||
-            statusResponse.status === 503
-          ) {
+          if ([429, 502, 503].includes(statusResponse.status)) {
             setConversionStatus('Server is busy. Checking again...');
-            setTimeout(() => {
-              if (cancelledRef.current) {
-                return;
-              }
-              pollStatus(conversionId, attempt + 1).catch((pollError) => {
-                setIsConverting(false);
-                setProgress(0);
-                setConversionStatus('');
-                setLimitError(pollError.message);
-              });
-            }, 8000);
+            setTimeout(() => pollStatus(conversionId, attempt + 1), 5000);
             return;
           }
-          // 404 after progress usually means the host restarted and lost the job.
           if (statusResponse.status === 404 && attempt < 4) {
-            setConversionStatus('Lost the conversion job. Checking again...');
-            setTimeout(() => {
-              if (cancelledRef.current) {
-                return;
-              }
-              pollStatus(conversionId, attempt + 1).catch((pollError) => {
-                setIsConverting(false);
-                setProgress(0);
-                setConversionStatus('');
-                setLimitError(pollError.message);
-              });
-            }, 3000);
+            setConversionStatus('Job was restarting. Checking again...');
+            setTimeout(() => pollStatus(conversionId, attempt + 1), 3000);
             return;
-          }
-          if (statusResponse.status === 404) {
-            throw new Error(
-              'Conversion was interrupted. The server ran out of memory or restarted. Please try again.'
-            );
           }
           throw new Error(`Status check failed: ${statusResponse.status}`);
         }
-        const statusData = await statusResponse.json();
 
+        const statusData = await statusResponse.json();
         if (statusData.message) {
           setConversionStatus(statusData.message);
         }
         if (typeof statusData.progress === 'number') {
-          // Never jump backwards. The old UI leapt to 40% before work started.
           setProgress((current) => Math.max(current, statusData.progress));
         }
 
         if (statusData.status === 'completed' && statusData.download_url) {
           setDownloadUrl(statusData.download_url);
-          setConversionStatus('Conversion completed successfully!');
-          setProgress(100);
           setIsConverting(false);
+          setProgress(100);
+          setConversionStatus('Conversion completed successfully.');
           if (onEpubGenerated) {
             onEpubGenerated(statusData.download_url);
           }
@@ -339,28 +288,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         }
 
         if (statusData.status === 'failed') {
-          throw new Error(statusData.message || 'Conversion failed on server');
+          throw new Error(statusData.message || 'Conversion failed.');
         }
 
-        if (attempt >= maxAttempts) {
-          throw new Error('Conversion timed out. Please try again.');
+        if (attempt >= 300) {
+          throw new Error('Conversion timed out. Try again.');
         }
-
-        setTimeout(() => {
-          if (cancelledRef.current) {
-            return;
-          }
-          pollStatus(conversionId, attempt + 1).catch((pollError) => {
-            if (cancelledRef.current || pollError.name === 'AbortError') {
-              return;
-            }
-            console.error('Upload error:', pollError);
-            setIsConverting(false);
-            setProgress(0);
-            setConversionStatus('');
-            setLimitError(pollError.message);
-          });
-        }, 4000);
+        setTimeout(() => pollStatus(conversionId, attempt + 1), 3500);
       };
 
       await pollStatus(result.conversion_id, 1);
@@ -368,68 +302,47 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       if (cancelledRef.current || error.name === 'AbortError') {
         return;
       }
-      console.error('Upload error:', error);
-      lastUpload.current = { key: '', at: 0 };
+      console.error(error);
       setIsConverting(false);
       setProgress(0);
       setConversionStatus('');
-      setLimitError(error.message);
+      setLimitError(error.message || 'Conversion failed.');
+      lastUpload.current = { key: '', at: 0 };
     }
-  }, [user, onEpubGenerated]);
+  }, [onEpubGenerated, user]);
 
-  const cancelUpload = useCallback(() => {
-    cancelledRef.current = true;
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
-    lastUpload.current = { key: '', at: 0 };
-    setIsConverting(false);
-    setProgress(0);
-    setConversionStatus('');
-    setDownloadUrl('');
-    setLimitError('');
-  }, []);
-
-  // Capture-phase listeners beat the browser default (red "blocked" cursor).
   useEffect(() => {
-    const allowDrop = (e) => {
-      e.preventDefault();
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'copy';
+    const preventBrowserDrop = (event) => {
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
       }
     };
-    const onDrop = (e) => {
-      // Only block the browser from opening the PDF. Upload is handled by the box.
-      e.preventDefault();
-    };
-    document.addEventListener('dragenter', allowDrop, true);
-    document.addEventListener('dragover', allowDrop, true);
-    document.addEventListener('drop', onDrop, true);
+    document.addEventListener('dragenter', preventBrowserDrop, true);
+    document.addEventListener('dragover', preventBrowserDrop, true);
+    document.addEventListener('drop', preventBrowserDrop, true);
     return () => {
-      document.removeEventListener('dragenter', allowDrop, true);
-      document.removeEventListener('dragover', allowDrop, true);
-      document.removeEventListener('drop', onDrop, true);
+      document.removeEventListener('dragenter', preventBrowserDrop, true);
+      document.removeEventListener('dragover', preventBrowserDrop, true);
+      document.removeEventListener('drop', preventBrowserDrop, true);
     };
   }, []);
 
-  const handleDragEnter = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDragEnter = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
     dragDepth.current += 1;
     setIsDragOver(true);
   }, []);
 
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = 'copy';
-    }
+  const handleDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
   }, []);
 
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDragLeave = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
     dragDepth.current -= 1;
     if (dragDepth.current <= 0) {
       dragDepth.current = 0;
@@ -437,44 +350,31 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     }
   }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDrop = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
     dragDepth.current = 0;
     setIsDragOver(false);
-    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    const file = event.dataTransfer?.files?.[0];
     if (file) {
       uploadFile(file);
     }
   }, [uploadFile]);
 
-  const handleFileInput = useCallback((e) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      uploadFile(files[0]);
-      e.target.value = '';
+  const handleFileInput = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      uploadFile(file);
+      event.target.value = '';
     }
   }, [uploadFile]);
 
-  const openFilePicker = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
   }, []);
 
   const handleDownload = useCallback(async () => {
-    if (!downloadUrl) {
-      return;
-    }
-
-    // Cloudinary links are public. Relative /api/download/... is not:
-    // the browser would open it on GitHub Pages and get a 404.
-    if (downloadUrl.startsWith('http') && downloadUrl.includes('cloudinary.com')) {
-      window.open(downloadUrl, '_blank');
-      return;
-    }
+    if (!downloadUrl) return;
 
     const path = downloadUrl.startsWith('http')
       ? downloadUrl
@@ -484,9 +384,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       headers: { Authorization: `Bearer ${user?.token || ''}` },
     });
     if (!response.ok) {
-      setLimitError('Could not download the EPUB. Convert the file again.');
+      setLimitError('Could not download this EPUB. Convert again.');
       return;
     }
+
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -498,95 +399,97 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     URL.revokeObjectURL(objectUrl);
   }, [downloadUrl, user]);
 
-  const resetUploader = useCallback(() => {
-    setIsConverting(false);
-    setConversionStatus('');
-    setDownloadUrl('');
-    setProgress(0);
-  }, []);
-
   return (
-    <UploaderContainer>
+    <Wrapper>
+      <HeaderRow>
+        <h2 style={{ fontSize: '1.25rem' }}>Convert PDF to EPUB</h2>
+        {onBack && (
+          <BackButton type="button" onClick={onBack}>
+            <i className="fas fa-arrow-left" style={{ marginRight: '0.45rem' }}></i>
+            Library
+          </BackButton>
+        )}
+      </HeaderRow>
+
       {!isConverting && !downloadUrl && (
-        <DropZone
-          $isDragOver={isDragOver}
-          onDragEnter={handleDragEnter}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <UploadIcon className="fas fa-file-pdf" />
-          <UploadText>Drop a PDF here</UploadText>
-          <UploadSubtext>Convert a PDF to EPUB with selectable text</UploadSubtext>
-          <LimitsNote>
-            Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
-            A paid plan can raise these limits later.
-          </LimitsNote>
-          {fileInfo && (
-            <FileInfo>
-              {fileInfo.name}: {fileInfo.pages} pages, {fileInfo.sizeMb.toFixed(1)} MB
-              {fileInfo.title ? ` — ${fileInfo.title}` : ''}
-            </FileInfo>
-          )}
-          {limitError && <LimitError>{limitError}</LimitError>}
-          <ChooseButton type="button" onClick={openFilePicker}>
-            Choose PDF
-          </ChooseButton>
-          <HiddenInput
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,application/pdf"
-            onChange={handleFileInput}
-          />
-        </DropZone>
+        <Card>
+          <DropZone
+            $active={isDragOver}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <Icon className="fas fa-file-pdf" aria-hidden="true"></Icon>
+            <MainText>Drop a PDF here</MainText>
+            <SubText>Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.</SubText>
+
+            {fileInfo && (
+              <Info>
+                {fileInfo.name}: {fileInfo.pages} pages, {fileInfo.sizeMb.toFixed(1)} MB
+                {fileInfo.title ? ` — ${fileInfo.title}` : ''}
+              </Info>
+            )}
+            {limitError && <ErrorText>{limitError}</ErrorText>}
+
+            <PrimaryButton type="button" onClick={openFilePicker}>
+              Choose PDF
+            </PrimaryButton>
+            <HiddenInput
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={handleFileInput}
+            />
+          </DropZone>
+        </Card>
       )}
 
-      {(isConverting || downloadUrl) && (
-        <ConversionStatus>
-          {isConverting && (
-            <>
-              <div>{conversionStatus}</div>
-              <ProgressBar>
-                <ProgressFill progress={progress} />
-              </ProgressBar>
-              <div>{progress}%</div>
-              <CancelButton type="button" onClick={cancelUpload}>
-                Cancel
-              </CancelButton>
-            </>
-          )}
-
-          {downloadUrl && (
-            <>
-              <div style={{ marginBottom: '1rem' }}>
-                <i className="fas fa-check-circle" style={{ color: '#4ade80', marginRight: '0.5rem' }}></i>
-                EPUB generated successfully!
-              </div>
-              <DownloadButton onClick={handleDownload}>
-                <i className="fas fa-download" style={{ marginRight: '0.5rem' }}></i>
-                Download EPUB
-              </DownloadButton>
-              <div style={{ marginTop: '1rem' }}>
-                <button
-                  onClick={resetUploader}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    color: 'white',
-                    padding: '0.5rem 1rem',
-                    borderRadius: '0.25rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Convert Another PDF
-                </button>
-              </div>
-            </>
-          )}
-        </ConversionStatus>
+      {isConverting && (
+        <Card>
+          <div>{conversionStatus || 'Working...'}</div>
+          <ProgressBar>
+            <ProgressFill $value={progress} />
+          </ProgressBar>
+          <div>{progress}%</div>
+          <ButtonsRow>
+            <GhostButton type="button" onClick={() => cancelUpload(true)}>
+              Cancel
+            </GhostButton>
+          </ButtonsRow>
+        </Card>
       )}
-    </UploaderContainer>
+
+      {downloadUrl && !isConverting && (
+        <Card>
+          <div style={{ fontSize: '1.12rem', fontWeight: 700 }}>
+            <i className="fas fa-check-circle" style={{ color: '#4ade80', marginRight: '0.55rem' }}></i>
+            EPUB generated successfully
+          </div>
+          <ButtonsRow>
+            <PrimaryButton type="button" onClick={handleDownload}>
+              Download EPUB
+            </PrimaryButton>
+            <GhostButton
+              type="button"
+              onClick={() => {
+                setDownloadUrl('');
+                setProgress(0);
+                setConversionStatus('');
+              }}
+            >
+              Convert another PDF
+            </GhostButton>
+            {onBack && (
+              <GhostButton type="button" onClick={onBack}>
+                Back to library
+              </GhostButton>
+            )}
+          </ButtonsRow>
+        </Card>
+      )}
+    </Wrapper>
   );
 };
 
-export default PdfUploader; 
+export default PdfUploader;

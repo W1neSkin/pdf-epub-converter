@@ -77,8 +77,8 @@ const ControlButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
 
   &:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.2);
@@ -96,8 +96,15 @@ const ControlButton = styled.button`
 `;
 
 const TocButton = styled(ControlButton)`
-  background: ${props => props.isActive ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)'};
-  border-color: ${props => props.isActive ? '#ffd700' : 'rgba(255, 255, 255, 0.2)'};
+  background: ${props => props.$isActive ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)'};
+  border-color: ${props => props.$isActive ? '#ffd700' : 'rgba(255, 255, 255, 0.2)'};
+`;
+
+const BackButton = styled(ControlButton)`
+  width: auto;
+  min-width: 90px;
+  padding: 0.5rem 0.85rem;
+  gap: 0.5rem;
 `;
 
 const NavigationControls = styled.div`
@@ -112,7 +119,8 @@ const ReaderControls = ({
   onPageChange, 
   onTocToggle, 
   isTocOpen, 
-  bookTitle 
+  bookTitle,
+  onBack,
 }) => {
   const progress = totalPages > 0 ? ((currentPageIndex + 1) / totalPages) * 100 : 0;
 
@@ -131,7 +139,18 @@ const ReaderControls = ({
   return (
     <ControlsContainer>
       <LeftControls>
-        <TocButton onClick={onTocToggle} isActive={isTocOpen} title="Toggle Table of Contents">
+        {onBack && (
+          <BackButton onClick={onBack} aria-label="Back to library">
+            <i className="fas fa-arrow-left"></i>
+            <span>Library</span>
+          </BackButton>
+        )}
+        <TocButton
+          onClick={onTocToggle}
+          $isActive={isTocOpen}
+          title="Toggle table of contents"
+          aria-label="Toggle table of contents"
+        >
           <i className="fas fa-list"></i>
         </TocButton>
       </LeftControls>
@@ -153,6 +172,7 @@ const ReaderControls = ({
             onClick={handlePreviousPage}
             disabled={currentPageIndex === 0}
             title="Previous Page"
+            aria-label="Previous page"
           >
             <i className="fas fa-chevron-left"></i>
           </ControlButton>
@@ -161,6 +181,7 @@ const ReaderControls = ({
             onClick={handleNextPage}
             disabled={currentPageIndex >= totalPages - 1}
             title="Next Page"
+            aria-label="Next page"
           >
             <i className="fas fa-chevron-right"></i>
           </ControlButton>

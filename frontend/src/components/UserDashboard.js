@@ -1,132 +1,112 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { API_BASE_URL } from '../config';
 
 const DashboardContainer = styled.div`
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
+`;
+
+const HeaderBlock = styled.div`
+  margin-bottom: 1.25rem;
+`;
+
+const Title = styled.h2`
+  font-size: 1.55rem;
+  margin-bottom: 0.4rem;
+`;
+
+const Subtitle = styled.p`
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.5;
 `;
 
 const StatsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+  margin: 1rem 0 1.5rem;
 `;
 
 const StatCard = styled.div`
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  text-align: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.85rem;
+  padding: 1rem;
 `;
 
-const StatNumber = styled.div`
-  font-size: 2rem;
-  font-weight: bold;
-  color: #ffd700;
-  margin-bottom: 0.5rem;
+const StatValue = styled.div`
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #facc15;
 `;
 
 const StatLabel = styled.div`
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.9rem;
+  margin-top: 0.35rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.88rem;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  max-width: 460px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1rem;
 `;
 
 const BooksGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
-  margin-top: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.9rem;
 `;
 
-const BookCard = styled.div`
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: transform 0.2s ease;
-  
-  &:hover {
-    transform: translateY(-2px);
-  }
+const BookCard = styled.article`
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.8rem;
+  padding: 0.95rem;
 `;
 
-const BookTitle = styled.h3`
-  color: white;
-  margin-bottom: 0.5rem;
-  font-size: 1.1rem;
+const BookName = styled.h3`
+  font-size: 1.05rem;
+  margin-bottom: 0.6rem;
+  word-break: break-word;
 `;
 
-const BookInfo = styled.div`
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
+const BookMeta = styled.div`
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.85rem;
+  line-height: 1.45;
 `;
 
-const BookActions = styled.div`
+const Actions = styled.div`
   display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
 `;
 
-const ActionButton = styled.button`
-  background: ${props => props.danger ? '#ff6b6b' : 'rgba(255, 215, 0, 0.2)'};
-  color: ${props => props.danger ? 'white' : '#ffd700'};
-  border: 1px solid ${props => props.danger ? '#ff6b6b' : '#ffd700'};
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+const Button = styled.button`
+  min-height: 2.4rem;
+  border-radius: 0.55rem;
+  border: 1px solid ${(props) => (props.$danger ? 'rgba(248, 113, 113, 0.75)' : 'rgba(255, 255, 255, 0.26)')};
+  background: ${(props) => (props.$danger ? 'rgba(248, 113, 113, 0.14)' : 'rgba(255, 255, 255, 0.1)')};
+  color: ${(props) => (props.$danger ? '#fecaca' : 'white')};
+  padding: 0.45rem 0.7rem;
   cursor: pointer;
-  font-size: 0.8rem;
-  transition: all 0.3s ease;
-  
-  &:hover {
-    background: ${props => props.danger ? '#ff5252' : 'rgba(255, 215, 0, 0.3)'};
-  }
+  font-weight: 600;
 `;
 
-const LoadingSpinner = styled.div`
+const StateBox = styled.div`
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1.4rem;
   text-align: center;
-  color: white;
-  padding: 2rem;
-  
-  i {
-    font-size: 2rem;
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-`;
-
-const EmptyState = styled.div`
-  text-align: center;
-  color: rgba(255, 255, 255, 0.7);
-  padding: 3rem;
-  
-  i {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    color: rgba(255, 255, 255, 0.3);
-  }
-`;
-
-const SectionTitle = styled.h2`
-  color: white;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  
-  i {
-    color: #ffd700;
-  }
+  color: ${(props) => props.$error ? '#fecaca' : 'rgba(255, 255, 255, 0.82)'};
 `;
 
 const UserDashboard = ({ user, onOpenBook }) => {
@@ -136,83 +116,83 @@ const UserDashboard = ({ user, onOpenBook }) => {
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchUserData();
-  }, []);
+  const token = user?.token || localStorage.getItem('authToken') || '';
 
-  const fetchUserData = async () => {
+  const loadDashboard = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+      const [statsResp, booksResp] = await Promise.all([
+        fetch(`${API_BASE_URL}/library/stats`, { headers }),
+        fetch(`${API_BASE_URL}/library/books?limit=50`, { headers }),
+      ]);
 
-      // Fetch library stats
-      const statsResponse = await fetch(`${API_BASE_URL}/library/stats`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (statsResponse.ok) {
-        const statsResult = await statsResponse.json();
-        setStats(statsResult.data);
+      if (statsResp.ok) {
+        const payload = await statsResp.json();
+        setStats(payload.data || null);
       }
-
-      // Fetch user books
-      const booksResponse = await fetch(`${API_BASE_URL}/library/books?limit=20`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (booksResponse.ok) {
-        const booksResult = await booksResponse.json();
-        setBooks(booksResult.data || []);
+      if (booksResp.ok) {
+        const payload = await booksResp.json();
+        setBooks(payload.data || []);
+      } else {
+        setError('Could not load your books.');
       }
-
-    } catch (error) {
-      setError('Failed to load dashboard data');
-      console.error('Dashboard error:', error);
+    } catch (loadError) {
+      console.error(loadError);
+      setError('Failed to load dashboard data.');
     } finally {
       setLoading(false);
     }
+  }, [token]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  const filteredBooks = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return books;
+    return books.filter((book) => (
+      (book.title || '').toLowerCase().includes(query) ||
+      (book.original_filename || '').toLowerCase().includes(query)
+    ));
+  }, [books, search]);
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const step = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / (1024 ** step)).toFixed(1)} ${units[step]}`;
   };
 
   const deleteBook = async (bookId) => {
-    if (!window.confirm('Are you sure you want to delete this book?')) return;
-
+    const shouldDelete = window.confirm('Delete this book from your library?');
+    if (!shouldDelete) return;
     try {
-      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE_URL}/library/books/${bookId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (response.ok) {
-        setBooks(books.filter(book => book.id !== bookId));
-        // Refresh stats
-        fetchUserData();
-      } else {
-        alert('Failed to delete book');
+      if (!response.ok) {
+        throw new Error('Delete failed');
       }
-    } catch (error) {
-      alert('Error deleting book');
-      console.error('Delete error:', error);
+      setBooks((prev) => prev.filter((book) => book.id !== bookId));
+      loadDashboard();
+    } catch (deleteError) {
+      console.error(deleteError);
+      setError('Could not delete this book.');
     }
   };
 
   const downloadBook = async (book) => {
-    if (!book?.id) {
-      alert('Download link not available');
-      return;
-    }
     try {
       const response = await fetch(`${API_BASE_URL}/library/books/${book.id}/file`, {
-        headers: { Authorization: `Bearer ${user.token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) {
-        throw new Error('download failed');
+        throw new Error('Download failed');
       }
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -223,145 +203,92 @@ const UserDashboard = ({ user, onOpenBook }) => {
       link.click();
       link.remove();
       URL.revokeObjectURL(objectUrl);
-    } catch (error) {
-      alert('Could not download this book. Convert it again.');
+    } catch (downloadError) {
+      console.error(downloadError);
+      setError('Could not download this book.');
     }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString();
   };
 
   if (loading) {
     return (
-      <LoadingSpinner>
-        <i className="fas fa-spinner"></i>
-        <div>Loading your dashboard...</div>
-      </LoadingSpinner>
+      <StateBox>
+        <i className="fas fa-spinner fa-spin" style={{ marginRight: '0.5rem' }}></i>
+        Loading your library...
+      </StateBox>
     );
   }
 
   return (
     <DashboardContainer>
-      <SectionTitle>
-        <i className="fas fa-chart-bar"></i>
-        Your Library Statistics
-      </SectionTitle>
-      
+      <HeaderBlock>
+        <Title>My Library</Title>
+        <Subtitle>Open converted books, download EPUB files, and manage your collection.</Subtitle>
+      </HeaderBlock>
+
       {stats && (
         <StatsGrid>
           <StatCard>
-            <StatNumber>{stats.total_books || 0}</StatNumber>
-            <StatLabel>Total Books</StatLabel>
+            <StatValue>{stats.total_books || 0}</StatValue>
+            <StatLabel>Books</StatLabel>
           </StatCard>
           <StatCard>
-            <StatNumber>{formatFileSize(stats.total_size || 0)}</StatNumber>
-            <StatLabel>Storage Used</StatLabel>
+            <StatValue>{formatFileSize(stats.total_size || 0)}</StatValue>
+            <StatLabel>Storage</StatLabel>
           </StatCard>
           <StatCard>
-            <StatNumber>{stats.total_pages || 0}</StatNumber>
-            <StatLabel>Total Pages</StatLabel>
+            <StatValue>{stats.total_pages || 0}</StatValue>
+            <StatLabel>Total pages</StatLabel>
           </StatCard>
           <StatCard>
-            <StatNumber>{stats.recent_conversions || 0}</StatNumber>
-            <StatLabel>Recent Conversions</StatLabel>
+            <StatValue>{stats.recent_conversions || 0}</StatValue>
+            <StatLabel>Recent conversions</StatLabel>
           </StatCard>
         </StatsGrid>
       )}
 
-      <SectionTitle>
-        <i className="fas fa-books"></i>
-        Your Books ({books.length})
-      </SectionTitle>
-
       {books.length > 0 && (
-        <input
+        <SearchInput
           type="text"
           placeholder="Search books..."
+          aria-label="Search books"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: '100%',
-            maxWidth: '400px',
-            marginBottom: '1rem',
-            padding: '0.75rem 1rem',
-            borderRadius: '0.5rem',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            background: 'rgba(255, 255, 255, 0.1)',
-            color: 'white'
-          }}
+          onChange={(event) => setSearch(event.target.value)}
         />
       )}
 
-      {books.length === 0 ? (
-        <EmptyState>
-          <i className="fas fa-book-open"></i>
-          <div>No books in your library yet</div>
-          <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
-            Start by converting a PDF to EPUB!
-          </div>
-        </EmptyState>
+      {filteredBooks.length === 0 ? (
+        <StateBox>{books.length ? 'No books match this search.' : 'No books yet. Convert your first PDF.'}</StateBox>
       ) : (
         <BooksGrid>
-          {books
-            .filter((book) => {
-              const query = search.trim().toLowerCase();
-              if (!query) return true;
-              return (
-                (book.title || '').toLowerCase().includes(query) ||
-                (book.original_filename || '').toLowerCase().includes(query)
-              );
-            })
-            .map((book) => (
+          {filteredBooks.map((book) => (
             <BookCard key={book.id}>
-              <BookTitle>{book.title}</BookTitle>
-              <BookInfo>
-                <div><strong>Original:</strong> {book.original_filename}</div>
-                <div><strong>Size:</strong> {formatFileSize(book.file_size)}</div>
-                {book.pages && <div><strong>Pages:</strong> {book.pages}</div>}
-                {book.words && <div><strong>Words:</strong> {book.words.toLocaleString()}</div>}
-                <div><strong>Created:</strong> {formatDate(book.created_at)}</div>
-              </BookInfo>
-              <BookActions>
-                {book.cloudinary_url && (
-                  <ActionButton onClick={() => onOpenBook && onOpenBook(book)}>
-                    <i className="fas fa-book-open"></i> Read
-                  </ActionButton>
-                )}
-                <ActionButton onClick={() => downloadBook(book)}>
-                  <i className="fas fa-download"></i> Download
-                </ActionButton>
-                <ActionButton danger onClick={() => deleteBook(book.id)}>
-                  <i className="fas fa-trash"></i> Delete
-                </ActionButton>
-              </BookActions>
+              <BookName>{book.title || book.original_filename || 'Untitled book'}</BookName>
+              <BookMeta>
+                <div>File: {book.original_filename || 'Unknown'}</div>
+                <div>Size: {formatFileSize(book.file_size)}</div>
+                <div>Pages: {book.pages || 0}</div>
+                <div>Words: {(book.words || 0).toLocaleString()}</div>
+              </BookMeta>
+
+              <Actions>
+                <Button type="button" onClick={() => onOpenBook && onOpenBook(book)}>
+                  Read
+                </Button>
+                <Button type="button" onClick={() => downloadBook(book)}>
+                  Download
+                </Button>
+                <Button type="button" $danger onClick={() => deleteBook(book.id)}>
+                  Delete
+                </Button>
+              </Actions>
             </BookCard>
           ))}
         </BooksGrid>
       )}
 
-      {error && (
-        <div style={{ 
-          color: '#ff6b6b', 
-          textAlign: 'center', 
-          margin: '2rem 0',
-          padding: '1rem',
-          background: 'rgba(255, 107, 107, 0.1)',
-          borderRadius: '0.5rem'
-        }}>
-          {error}
-        </div>
-      )}
+      {error && <StateBox $error>{error}</StateBox>}
     </DashboardContainer>
   );
 };
 
-export default UserDashboard; 
+export default UserDashboard;

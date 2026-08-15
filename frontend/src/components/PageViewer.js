@@ -1,235 +1,72 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 
 const ViewerContainer = styled.div`
   width: 100%;
   height: 100%;
   overflow: auto;
-  position: relative;
-  background: white;
+  background: #ffffff;
 `;
 
 const PageContent = styled.div`
-  max-width: 100%;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 1rem;
-  line-height: 1.6;
-  color: #333;
+  padding: 1.25rem;
+  color: #111827;
+  line-height: 1.7;
   min-height: 100%;
-  box-sizing: border-box;
 
-  /* PDF Page Container Styles */
-  .page-container {
-    position: relative;
-    margin: 0 auto 40px auto;
-    max-width: 100%;
-    border: 1px solid #ccc;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  .page-title {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    color: #374151;
   }
-
-  .page-image {
-    width: 100%;
-    height: auto;
-    display: block;
-  }
-
-  .text-layer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-  }
-
-  .text-element {
-    position: absolute;
-    color: rgba(0, 0, 0, 0.1);
-    user-select: text;
-    pointer-events: auto;
-    z-index: 10;
-    margin: 0;
-    padding: 0;
-    line-height: 1;
-    white-space: nowrap;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    cursor: text;
-    font-family: inherit;
-  }
-
-  .text-element:hover {
-    background-color: rgba(255, 255, 0, 0.3);
-    color: rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 0, 0.6);
-  }
-
-  .text-element:focus,
-  .text-element:active {
-    background-color: rgba(0, 123, 255, 0.3);
-    color: rgba(0, 0, 0, 0.9);
-    border: 1px solid rgba(0, 123, 255, 0.6);
-  }
-
-  .page-info {
-    text-align: center;
-    margin-bottom: 20px;
-    padding: 10px;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-    border: 1px solid #dee2e6;
-  }
-
-  /* Regular EPUB content styling for non-PDF content */
-  h1, h2, h3, h4, h5, h6 {
-    margin: 1.5rem 0 1rem;
-    color: #2c3e50;
-    line-height: 1.3;
-  }
-
-  h1 { font-size: 2rem; }
-  h2 { font-size: 1.5rem; }
-  h3 { font-size: 1.25rem; }
 
   p {
-    margin: 1rem 0;
+    margin: 0 0 0.8rem;
   }
 
-  /* Regular images (not page images) */
-  img:not(.page-image) {
+  img {
     max-width: 100%;
     height: auto;
-    display: block;
-    margin: 1rem auto;
-    border-radius: 0.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
 
-  blockquote {
-    border-left: 4px solid #3498db;
-    margin: 1.5rem 0;
-    padding: 1rem 1.5rem;
-    background: #f8f9fa;
-    font-style: italic;
-  }
-
-  code {
-    background: #f8f9fa;
-    padding: 0.2rem 0.4rem;
-    border-radius: 0.25rem;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-  }
-
-  pre {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    overflow-x: auto;
-    margin: 1rem 0;
-  }
-
-  ul, ol {
-    margin: 1rem 0;
-    padding-left: 2rem;
-  }
-
-  li {
-    margin: 0.5rem 0;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-  }
-
-  th, td {
-    border: 1px solid #ddd;
-    padding: 0.75rem;
-    text-align: left;
-  }
-
-  th {
-    background: #f8f9fa;
-    font-weight: 600;
-  }
-
-  /* Text selection styling */
   ::selection {
-    background: rgba(52, 152, 219, 0.3);
-  }
-
-  ::-moz-selection {
-    background: rgba(52, 152, 219, 0.3);
-  }
-
-  /* Custom scrollbar */
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: #f1f1f1;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 4px;
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background: #a1a1a1;
+    background: rgba(59, 130, 246, 0.25);
   }
 `;
 
-const NavigationOverlay = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  pointer-events: none;
-`;
-
-const NavArea = styled.div`
-  flex: 1;
-  pointer-events: auto;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s ease;
-
-  &:hover {
-    background: rgba(0, 0, 0, 0.05);
+function resolveZipPath(opfBasePath, pageHref, assetHref) {
+  const cleanAsset = (assetHref || '').split('#')[0].split('?')[0];
+  if (!cleanAsset) {
+    return '';
   }
+  const pageFullPath = `${opfBasePath || ''}${pageHref || ''}`;
+  const pageDir = pageFullPath.includes('/')
+    ? pageFullPath.slice(0, pageFullPath.lastIndexOf('/') + 1)
+    : '';
+  const combined = `${pageDir}${cleanAsset}`;
+  const parts = [];
+  combined.split('/').forEach((part) => {
+    if (!part || part === '.') return;
+    if (part === '..') {
+      parts.pop();
+      return;
+    }
+    parts.push(part);
+  });
+  return parts.join('/');
+}
 
-  &:first-child {
-    justify-content: flex-start;
-    padding-left: 2rem;
-  }
-
-  &:last-child {
-    justify-content: flex-end;
-    padding-right: 2rem;
-  }
-`;
-
-const NavIcon = styled.i`
-  font-size: 2rem;
-  color: rgba(0, 0, 0, 0.3);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-
-  ${NavArea}:hover & {
-    opacity: 1;
-  }
-`;
-
-const PageViewer = ({ pages, currentPageIndex, epubData, onPageChange }) => {
+const PageViewer = ({ pages, currentPageIndex, epubData }) => {
   const [processedContent, setProcessedContent] = useState('');
-  const containerRef = useRef();
+  const containerRef = useRef(null);
+  const objectUrlsRef = useRef([]);
+
+  const cleanupObjectUrls = useCallback(() => {
+    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    objectUrlsRef.current = [];
+  }, []);
 
   const processPageContent = useCallback(async (page) => {
     if (!page || !page.content) {
@@ -237,57 +74,48 @@ const PageViewer = ({ pages, currentPageIndex, epubData, onPageChange }) => {
       return;
     }
 
+    cleanupObjectUrls();
+
     try {
-      // Parse the HTML content
       const parser = new DOMParser();
       const doc = parser.parseFromString(page.content, 'text/html');
-      
-      // Process images if they exist in the EPUB
+      const bodyNode = doc.body || doc.documentElement;
+
       if (epubData && epubData.zip) {
-        const images = doc.querySelectorAll('img');
-        for (let img of images) {
+        const images = bodyNode.querySelectorAll('img');
+        for (const img of images) {
           const src = img.getAttribute('src');
-          if (src && !src.startsWith('http') && !src.startsWith('data:')) {
-            try {
-              // Construct the full path relative to the EPUB structure
-              const fullPath = epubData.opfBasePath + src;
-              const imageFile = epubData.zip.file(fullPath);
-              
-              if (imageFile) {
-                const imageBlob = await imageFile.async('blob');
-                const imageUrl = URL.createObjectURL(imageBlob);
-                img.src = imageUrl;
-              }
-            } catch (err) {
-              console.warn('Could not load image:', src, err);
-            }
+          if (!src || src.startsWith('http') || src.startsWith('data:')) {
+            continue;
           }
+          const zipPath = resolveZipPath(epubData.opfBasePath, page.href, src);
+          if (!zipPath) {
+            continue;
+          }
+          const imageFile = epubData.zip.file(zipPath);
+          if (!imageFile) {
+            continue;
+          }
+          const imageBlob = await imageFile.async('blob');
+          const objectUrl = URL.createObjectURL(imageBlob);
+          objectUrlsRef.current.push(objectUrl);
+          img.setAttribute('src', objectUrl);
         }
       }
 
-      // Check if this is a PDF-converted page with overlay structure
-      const pageContainer = doc.querySelector('.page-container');
-      const textLayer = doc.querySelector('.text-layer');
-      
-      if (pageContainer && textLayer) {
-        // This is a PDF page with text overlay - preserve the entire structure
-        const bodyContent = doc.body ? doc.body.innerHTML : doc.documentElement.innerHTML;
-        setProcessedContent(bodyContent);
-      } else {
-        // Regular EPUB content - extract body content as before
-        const bodyContent = doc.body ? doc.body.innerHTML : doc.documentElement.innerHTML;
-        setProcessedContent(bodyContent);
-      }
-      
-      // Scroll to top when page changes
+      const cssBlock = epubData?.cssText
+        ? `<style>${epubData.cssText}</style>`
+        : '';
+      setProcessedContent(`${cssBlock}${bodyNode.innerHTML}`);
+
       if (containerRef.current) {
         containerRef.current.scrollTop = 0;
       }
-    } catch (err) {
-      console.error('Error processing page content:', err);
+    } catch (error) {
+      console.error('Error processing page content:', error);
       setProcessedContent('<div>Error loading page content</div>');
     }
-  }, [epubData]);
+  }, [cleanupObjectUrls, epubData]);
 
   useEffect(() => {
     if (pages && pages[currentPageIndex]) {
@@ -295,37 +123,15 @@ const PageViewer = ({ pages, currentPageIndex, epubData, onPageChange }) => {
     }
   }, [pages, currentPageIndex, processPageContent]);
 
-  const handlePreviousPage = useCallback(() => {
-    if (currentPageIndex > 0) {
-      onPageChange(currentPageIndex - 1);
-    }
-  }, [currentPageIndex, onPageChange]);
-
-  const handleNextPage = useCallback(() => {
-    if (currentPageIndex < pages.length - 1) {
-      onPageChange(currentPageIndex + 1);
-    }
-  }, [currentPageIndex, pages.length, onPageChange]);
-
-  // Handle keyboard navigation
   useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        handlePreviousPage();
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        handleNextPage();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [handlePreviousPage, handleNextPage]);
+    return () => cleanupObjectUrls();
+  }, [cleanupObjectUrls]);
 
   if (!pages || pages.length === 0) {
     return (
       <ViewerContainer>
         <PageContent>
-          <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
             No pages to display
           </div>
         </PageContent>
@@ -335,25 +141,9 @@ const PageViewer = ({ pages, currentPageIndex, epubData, onPageChange }) => {
 
   return (
     <ViewerContainer ref={containerRef}>
-      <PageContent 
-        dangerouslySetInnerHTML={{ __html: processedContent }}
-      />
-      
-      <NavigationOverlay>
-        <NavArea onClick={handlePreviousPage} style={{ cursor: currentPageIndex === 0 ? 'default' : 'pointer' }}>
-          {currentPageIndex > 0 && (
-            <NavIcon className="fas fa-chevron-left" />
-          )}
-        </NavArea>
-        
-        <NavArea onClick={handleNextPage} style={{ cursor: currentPageIndex >= pages.length - 1 ? 'default' : 'pointer' }}>
-          {currentPageIndex < pages.length - 1 && (
-            <NavIcon className="fas fa-chevron-right" />
-          )}
-        </NavArea>
-      </NavigationOverlay>
+      <PageContent dangerouslySetInnerHTML={{ __html: processedContent }} />
     </ViewerContainer>
   );
 };
 
-export default PageViewer; 
+export default PageViewer;
