@@ -6,7 +6,7 @@ import FileUploader from './components/FileUploader';
 import PdfUploader from './components/PdfUploader';
 import LandingPage from './components/LandingPage';
 import UserDashboard from './components/UserDashboard';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, AUTH_BASE_URL } from './config';
 
 const GlobalStyle = createGlobalStyle`
   * {
@@ -166,8 +166,12 @@ function App() {
       return;
     }
 
-    fetch(`${API_BASE_URL}/auth/verify`, {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    fetch(`${AUTH_BASE_URL}/auth/verify`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
     })
       .then((response) => {
         if (response.ok || response.status >= 500) {
@@ -183,7 +187,10 @@ function App() {
         setUser(parsedUser);
       })
       .catch(() => setUser(parsedUser))
-      .finally(() => setAuthChecked(true));
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setAuthChecked(true);
+      });
   }, []);
 
   const goDashboard = useCallback(() => {

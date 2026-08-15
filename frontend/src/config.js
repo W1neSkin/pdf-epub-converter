@@ -2,6 +2,10 @@
 export const API_BASE_URL =
   process.env.REACT_APP_API_URL || 'https://pdf-converter-api-gateway.onrender.com';
 
+// Auth calls go directly to auth service to avoid extra gateway cold-start hop.
+export const AUTH_BASE_URL =
+  process.env.REACT_APP_AUTH_URL || 'https://pdf-converter-auth-service.onrender.com';
+
 // Free-plan limits. Keep in sync with backend/plan_limits.py.
 // A future paid plan can raise pages and file size when we pay for a bigger host.
 export const PLANS = {

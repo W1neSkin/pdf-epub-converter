@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { API_BASE_URL } from '../config';
+import { AUTH_BASE_URL } from '../config';
 
 const Card = styled.div`
   background: rgba(15, 23, 42, 0.78);
@@ -67,16 +67,25 @@ const Message = styled.div`
   color: ${(props) => (props.$error ? '#fecaca' : '#bbf7d0')};
 `;
 
+const Hint = styled.div`
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.72);
+  margin-top: 0.45rem;
+`;
+
 const AuthForm = ({ onAuthSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [loadingHint, setLoadingHint] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
   });
+
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const onFieldChange = (event) => {
     const { name, value } = event.target;
@@ -88,6 +97,7 @@ const AuthForm = ({ onAuthSuccess }) => {
   const submit = async (event) => {
     event.preventDefault();
     setLoading(true);
+    setLoadingHint('');
     setError('');
     setSuccess('');
 
@@ -97,11 +107,46 @@ const AuthForm = ({ onAuthSuccess }) => {
         ? { email: formData.email, password: formData.password }
         : { email: formData.email, password: formData.password, full_name: formData.fullName };
 
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const retryableStatuses = new Set([429, 502, 503, 504]);
+      let response = null;
+      const attempts = 3;
+
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45000);
+        try {
+          response = await fetch(`${AUTH_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+        } catch (requestError) {
+          clearTimeout(timeoutId);
+          const canRetry = attempt < attempts;
+          if (canRetry) {
+            setLoadingHint('Auth service is waking up. This can take 20-40 seconds...');
+            await wait(6000);
+            continue;
+          }
+          throw requestError;
+        }
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          break;
+        }
+        if (retryableStatuses.has(response.status) && attempt < attempts) {
+          setLoadingHint('Auth service is waking up. This can take 20-40 seconds...');
+          await wait(6000);
+          continue;
+        }
+        break;
+      }
+
+      if (!response) {
+        throw new Error('Auth service is unavailable right now. Please try again.');
+      }
 
       const text = await response.text();
       let result = {};
@@ -131,8 +176,13 @@ const AuthForm = ({ onAuthSuccess }) => {
         setFormData((prev) => ({ ...prev, password: '' }));
       }
     } catch (submitError) {
-      setError(submitError.message || 'Network error');
+      if (submitError.name === 'AbortError') {
+        setError('Auth service took too long to respond. Please try again in 20-40 seconds.');
+      } else {
+        setError(submitError.message || 'Network error');
+      }
     } finally {
+      setLoadingHint('');
       setLoading(false);
     }
   };
@@ -186,6 +236,9 @@ const AuthForm = ({ onAuthSuccess }) => {
         <PrimaryButton type="submit" disabled={loading}>
           {loading ? 'Please wait...' : isLogin ? 'Login' : 'Create account'}
         </PrimaryButton>
+        {loading && (
+          <Hint>{loadingHint || 'Submitting your request...'}</Hint>
+        )}
       </Form>
 
       <div style={{ marginTop: '0.8rem' }}>
@@ -195,6 +248,7 @@ const AuthForm = ({ onAuthSuccess }) => {
             setIsLogin((prev) => !prev);
             setError('');
             setSuccess('');
+            setLoadingHint('');
             setFormData({ fullName: '', email: '', password: '' });
           }}
         >
