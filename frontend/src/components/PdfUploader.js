@@ -82,6 +82,16 @@ const ChooseButton = styled.button`
   cursor: pointer;
 `;
 
+const CancelButton = styled.button`
+  margin-top: 1rem;
+  background: transparent;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+`;
+
 const ConversionStatus = styled.div`
   background: rgba(255, 255, 255, 0.1);
   border-radius: 0.5rem;
@@ -135,6 +145,8 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const dragDepth = useRef(0);
   const fileInputRef = useRef(null);
   const lastUpload = useRef({ key: '', at: 0 });
+  const cancelledRef = useRef(false);
+  const abortRef = useRef(null);
 
   const uploadFile = useCallback(async (file) => {
     if (!file) {
@@ -188,6 +200,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       return;
     }
 
+    cancelledRef.current = false;
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
+
     setIsConverting(true);
     setDownloadUrl('');
     setConversionStatus('Uploading PDF...');
@@ -203,77 +219,30 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         headers['Authorization'] = `Bearer ${user.token}`;
       }
 
-      const sendConvert = () => {
-        const upload = new FormData();
-        upload.append('file', file);
-        return fetch(`${API_BASE_URL}/api/convert`, {
-          method: 'POST',
-          headers,
-          body: upload,
-        });
-      };
-      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      const isRetryable = (status) =>
-        status === 429 || status === 502 || status === 503 || status === 504;
-
-      // Wake the sleeping converter with a small GET. Do not POST the PDF yet.
+      // One wake ping, then one upload. No silent retry loop.
       setConversionStatus('Starting the converter...');
-      setProgress(0);
-      for (let wakeTry = 1; wakeTry <= 8; wakeTry += 1) {
-        try {
-          const wake = await fetch(`${API_BASE_URL}/converter/health`);
-          if (wake.ok) {
-            break;
-          }
-        } catch (wakeError) {
-          // Keep waiting. A cold Render host often drops the first calls.
-        }
-        if (wakeTry === 8) {
-          throw new Error('The converter did not start. Try again in a minute.');
-        }
-        await sleep(5000);
-      }
-      const isNetworkError = (err) => {
-        const text = String(err && err.message ? err.message : err).toLowerCase();
-        return (
-          text.includes('networkerror') ||
-          text.includes('failed to fetch') ||
-          text.includes('network request failed') ||
-          text.includes('load failed')
-        );
-      };
-
-      let response = null;
-      for (let sendTry = 1; sendTry <= 3; sendTry += 1) {
-        try {
-          response = await sendConvert();
-          if (!isRetryable(response.status)) {
-            break;
-          }
-          if (sendTry === 3) {
-            break;
-          }
-          setConversionStatus('Starting the converter...');
-          setProgress(0);
-          await sleep(response.status === 429 ? 15000 : 5000);
-        } catch (err) {
-          if (!isNetworkError(err) || sendTry === 3) {
-            throw new Error(
-              isNetworkError(err)
-                ? 'Could not reach the converter. The file will be sent again.'
-                : err.message
-            );
-          }
-          setConversionStatus('Connection lost. Sending the file again...');
-          setProgress(0);
-          await sleep(5000);
+      try {
+        await fetch(`${API_BASE_URL}/converter/health`, { signal });
+      } catch (wakeError) {
+        if (wakeError.name === 'AbortError' || cancelledRef.current) {
+          return;
         }
       }
+      if (cancelledRef.current) {
+        return;
+      }
 
-      if (!response || !response.ok) {
-        if (!response || isRetryable(response.status)) {
-          throw new Error('Server is busy after several tries.');
-        }
+      setConversionStatus('Uploading PDF...');
+      const upload = new FormData();
+      upload.append('file', file);
+      const response = await fetch(`${API_BASE_URL}/api/convert`, {
+        method: 'POST',
+        headers,
+        body: upload,
+        signal,
+      });
+
+      if (!response.ok) {
         let serverMessage = '';
         try {
           const errBody = await response.json();
@@ -297,9 +266,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       // Convert now returns immediately. Poll until the background job finishes.
       const maxAttempts = 400;
       const pollStatus = async (conversionId, attempt) => {
+        if (cancelledRef.current) {
+          return;
+        }
         const statusHeaders = { Authorization: `Bearer ${user.token}` };
         const statusResponse = await fetch(`${API_BASE_URL}/api/status/${conversionId}`, {
-          headers: statusHeaders
+          headers: statusHeaders,
+          signal,
         });
         if (!statusResponse.ok) {
           if (
@@ -309,6 +282,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           ) {
             setConversionStatus('Server is busy. Checking again...');
             setTimeout(() => {
+              if (cancelledRef.current) {
+                return;
+              }
               pollStatus(conversionId, attempt + 1).catch((pollError) => {
                 setIsConverting(false);
                 setProgress(0);
@@ -322,6 +298,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           if (statusResponse.status === 404 && attempt < 4) {
             setConversionStatus('Lost the conversion job. Checking again...');
             setTimeout(() => {
+              if (cancelledRef.current) {
+                return;
+              }
               pollStatus(conversionId, attempt + 1).catch((pollError) => {
                 setIsConverting(false);
                 setProgress(0);
@@ -368,7 +347,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         }
 
         setTimeout(() => {
+          if (cancelledRef.current) {
+            return;
+          }
           pollStatus(conversionId, attempt + 1).catch((pollError) => {
+            if (cancelledRef.current || pollError.name === 'AbortError') {
+              return;
+            }
             console.error('Upload error:', pollError);
             setIsConverting(false);
             setProgress(0);
@@ -380,6 +365,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
 
       await pollStatus(result.conversion_id, 1);
     } catch (error) {
+      if (cancelledRef.current || error.name === 'AbortError') {
+        return;
+      }
       console.error('Upload error:', error);
       lastUpload.current = { key: '', at: 0 };
       setIsConverting(false);
@@ -388,6 +376,19 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       setLimitError(error.message);
     }
   }, [user, onEpubGenerated]);
+
+  const cancelUpload = useCallback(() => {
+    cancelledRef.current = true;
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    lastUpload.current = { key: '', at: 0 };
+    setIsConverting(false);
+    setProgress(0);
+    setConversionStatus('');
+    setDownloadUrl('');
+    setLimitError('');
+  }, []);
 
   // Capture-phase listeners beat the browser default (red "blocked" cursor).
   useEffect(() => {
@@ -549,6 +550,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
                 <ProgressFill progress={progress} />
               </ProgressBar>
               <div>{progress}%</div>
+              <CancelButton type="button" onClick={cancelUpload}>
+                Cancel
+              </CancelButton>
             </>
           )}
 
