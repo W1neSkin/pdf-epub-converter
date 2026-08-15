@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { API_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES } from '../config';
+import { CONVERTER_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES } from '../config';
 import { getPdfInfo } from '../pdfInfo';
 
 const Wrapper = styled.section`
@@ -274,7 +274,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
       let response = null;
       for (let uploadTry = 1; uploadTry <= uploadAttempts; uploadTry += 1) {
         try {
-          response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          response = await fetch(`${CONVERTER_BASE_URL}${endpoint}`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${user.token}` },
             body: upload,
@@ -343,7 +343,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
       const pollStatus = async (conversionId, attempt) => {
         if (cancelledRef.current) return;
 
-        const statusResponse = await fetch(`${API_BASE_URL}/api/status/${conversionId}`, {
+        const statusResponse = await fetch(`${CONVERTER_BASE_URL}/api/status/${conversionId}`, {
           headers: { Authorization: `Bearer ${user.token}` },
           signal,
         });
@@ -497,7 +497,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
 
     const path = downloadUrl.startsWith('http')
       ? downloadUrl
-      : `${API_BASE_URL}${downloadUrl.startsWith('/') ? downloadUrl : `/${downloadUrl}`}`;
+      : `${CONVERTER_BASE_URL}${downloadUrl.startsWith('/') ? downloadUrl : `/${downloadUrl}`}`;
 
     const response = await fetch(path, {
       headers: { Authorization: `Bearer ${user?.token || ''}` },
