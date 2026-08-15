@@ -104,4 +104,54 @@ describe('PdfUploader', () => {
     const convertCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('/api/convert'));
     expect(convertCalls).toHaveLength(0);
   });
+
+  test('extracts tables in CSV mode with dedicated endpoint', async () => {
+    getPdfInfo.mockResolvedValue({
+      name: 'sample.pdf',
+      pages: 1,
+      sizeMb: 0.1,
+      title: '',
+    });
+
+    global.fetch = jest.fn((url) => {
+      const requestUrl = String(url);
+      if (requestUrl.includes('/converter/health')) {
+        return Promise.resolve({ ok: true });
+      }
+      if (requestUrl.includes('/api/extract-tables')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, conversion_id: 'csv-1' }),
+        });
+      }
+      if (requestUrl.includes('/api/status/')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            status: 'completed',
+            progress: 100,
+            message: 'done',
+            download_url: '/api/download/csv-1',
+            output_kind: 'csv',
+            download_name: 'sample_tables.csv',
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    const { container } = render(<PdfUploader user={user} onEpubGenerated={jest.fn()} onBack={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Extract tables \(CSV\)/i }));
+
+    const input = container.querySelector('input[type="file"]');
+    const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/CSV generated successfully/i)).toBeInTheDocument();
+    });
+
+    const csvCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('/api/extract-tables'));
+    expect(csvCalls).toHaveLength(1);
+  });
 });

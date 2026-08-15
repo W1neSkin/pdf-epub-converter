@@ -279,6 +279,18 @@ async def convert_proxy(request: Request, user: Dict[str, Any] = Depends(get_cur
         timeout=settings.CONVERT_TIMEOUT
     )
 
+
+@app.api_route("/api/extract-tables", methods=["POST"])
+async def extract_tables_proxy(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
+    """Proxy PDF table extraction requests to converter service"""
+    return await forward_request(
+        "converter",
+        "/api/extract-tables",
+        request,
+        user,
+        timeout=settings.CONVERT_TIMEOUT
+    )
+
 @app.api_route("/api/download/{file_id}", methods=["GET"])
 async def download_proxy(file_id: str, request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     """Proxy download requests to converter service"""

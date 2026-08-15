@@ -51,4 +51,4 @@ jobs:
           pip install pydantic-settings pytest
 
       - name: Run backend tests
-        run: PYTHONPATH=. pytest tests/test_shared_config.py tests/test_epub_pipeline.py
+        run: PYTHONPATH=. pytest tests

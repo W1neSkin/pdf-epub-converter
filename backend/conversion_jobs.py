@@ -140,6 +140,10 @@ def run_conversion_job(
             total_words=total_words,
             book_id=book_id,
             file_size=os.path.getsize(epub_path),
+            output_kind="epub",
+            output_filename=f"{conversion_id}.epub",
+            output_mime="application/epub+zip",
+            download_name=f"{os.path.splitext(filename)[0]}.epub",
         )
         logger.info("Conversion %s completed: %s pages", conversion_id, page_count)
     except Exception as exc:

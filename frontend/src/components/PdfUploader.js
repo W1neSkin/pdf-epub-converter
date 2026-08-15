@@ -105,6 +105,25 @@ const ButtonsRow = styled.div`
   margin-top: 1rem;
 `;
 
+const ModeButtonsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+`;
+
+const ModeButton = styled.button`
+  border: 1px solid ${(props) => (props.$active ? '#facc15' : 'rgba(255, 255, 255, 0.28)')};
+  border-radius: 0.65rem;
+  background: ${(props) => (props.$active ? 'rgba(250, 204, 21, 0.2)' : 'transparent')};
+  color: white;
+  min-height: 2.6rem;
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+  font-weight: 600;
+`;
+
 const ProgressBar = styled.div`
   height: 0.45rem;
   border-radius: 999px;
@@ -128,12 +147,17 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
   const [progress, setProgress] = useState(0);
   const [limitError, setLimitError] = useState('');
   const [fileInfo, setFileInfo] = useState(null);
+  const [selectedAction, setSelectedAction] = useState('epub');
+  const [jobType, setJobType] = useState('epub');
+  const [downloadName, setDownloadName] = useState('converted.epub');
+  const [csvStats, setCsvStats] = useState({ tableCount: 0, rowCount: 0 });
 
   const dragDepth = useRef(0);
   const fileInputRef = useRef(null);
   const lastUpload = useRef({ key: '', at: 0 });
   const cancelledRef = useRef(false);
   const abortRef = useRef(null);
+  const actionRef = useRef('epub');
 
   const cancelUpload = useCallback((showMessage = true) => {
     cancelledRef.current = true;
@@ -148,7 +172,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     }
   }, []);
 
-  const uploadFile = useCallback(async (file) => {
+  const uploadFile = useCallback(async (file, action = 'epub') => {
     if (!file) return;
 
     const uploadKey = `${file.name}:${file.size}:${file.lastModified}`;
@@ -198,10 +222,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     setDownloadUrl('');
     setIsConverting(true);
     setProgress(0);
-    setConversionStatus('Starting converter...');
+    setCsvStats({ tableCount: 0, rowCount: 0 });
+    setJobType(action);
+    setDownloadName(action === 'csv' ? 'tables.csv' : 'converted.epub');
+    setConversionStatus(action === 'csv' ? 'Starting table extractor...' : 'Starting converter...');
 
     try {
-      if (onEpubGenerated) {
+      if (onEpubGenerated && action === 'epub') {
         onEpubGenerated(null);
       }
 
@@ -217,10 +244,11 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         return;
       }
 
-      setConversionStatus('Uploading PDF...');
+      setConversionStatus(action === 'csv' ? 'Uploading PDF for table extraction...' : 'Uploading PDF...');
       const upload = new FormData();
       upload.append('file', file);
-      const response = await fetch(`${API_BASE_URL}/api/convert`, {
+      const endpoint = action === 'csv' ? '/api/extract-tables' : '/api/convert';
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${user.token}` },
         body: upload,
@@ -240,11 +268,11 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
 
       const result = await response.json();
       if (!result.success || !result.conversion_id) {
-        throw new Error(result.message || 'Conversion failed');
+        throw new Error(result.message || 'Request failed');
       }
 
       setProgress(5);
-      setConversionStatus('Uploaded. Conversion started...');
+      setConversionStatus(action === 'csv' ? 'Uploaded. Extracting tables...' : 'Uploaded. Conversion started...');
 
       const pollStatus = async (conversionId, attempt) => {
         if (cancelledRef.current) return;
@@ -280,8 +308,20 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           setDownloadUrl(statusData.download_url);
           setIsConverting(false);
           setProgress(100);
-          setConversionStatus('Conversion completed successfully.');
-          if (onEpubGenerated) {
+          const outputKind = statusData.output_kind || action;
+          setJobType(outputKind);
+          setDownloadName(
+            statusData.download_name ||
+            (outputKind === 'csv' ? 'tables.csv' : 'converted.epub')
+          );
+          setConversionStatus(outputKind === 'csv' ? 'CSV generated successfully.' : 'Conversion completed successfully.');
+          if (outputKind === 'csv') {
+            setCsvStats({
+              tableCount: Number(statusData.table_count || 0),
+              rowCount: Number(statusData.row_count || 0),
+            });
+          }
+          if (onEpubGenerated && outputKind === 'epub') {
             onEpubGenerated(statusData.download_url);
           }
           return;
@@ -357,19 +397,21 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     setIsDragOver(false);
     const file = event.dataTransfer?.files?.[0];
     if (file) {
-      uploadFile(file);
+      uploadFile(file, actionRef.current);
     }
   }, [uploadFile]);
 
   const handleFileInput = useCallback((event) => {
     const file = event.target.files?.[0];
     if (file) {
-      uploadFile(file);
+      uploadFile(file, actionRef.current);
       event.target.value = '';
     }
   }, [uploadFile]);
 
-  const openFilePicker = useCallback(() => {
+  const openFilePicker = useCallback((action) => {
+    actionRef.current = action;
+    setSelectedAction(action);
     fileInputRef.current?.click();
   }, []);
 
@@ -384,7 +426,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
       headers: { Authorization: `Bearer ${user?.token || ''}` },
     });
     if (!response.ok) {
-      setLimitError('Could not download this EPUB. Convert again.');
+      setLimitError('Could not download this file. Try again.');
       return;
     }
 
@@ -392,17 +434,19 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
-    link.download = 'converted.epub';
+    link.download = downloadName;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(objectUrl);
-  }, [downloadUrl, user]);
+  }, [downloadName, downloadUrl, user]);
 
   return (
     <Wrapper>
       <HeaderRow>
-        <h2 style={{ fontSize: '1.25rem' }}>Convert PDF to EPUB</h2>
+        <h2 style={{ fontSize: '1.25rem' }}>
+          {selectedAction === 'csv' ? 'Extract PDF tables to CSV' : 'Convert PDF to EPUB'}
+        </h2>
         {onBack && (
           <BackButton type="button" onClick={onBack}>
             <i className="fas fa-arrow-left" style={{ marginRight: '0.45rem' }}></i>
@@ -422,7 +466,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
           >
             <Icon className="fas fa-file-pdf" aria-hidden="true"></Icon>
             <MainText>Drop a PDF here</MainText>
-            <SubText>Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.</SubText>
+            <SubText>
+              Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
+              {' '}Current drop mode: {selectedAction === 'csv' ? 'CSV tables' : 'EPUB'}.
+            </SubText>
 
             {fileInfo && (
               <Info>
@@ -432,9 +479,36 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
             )}
             {limitError && <ErrorText>{limitError}</ErrorText>}
 
-            <PrimaryButton type="button" onClick={openFilePicker}>
-              Choose PDF
-            </PrimaryButton>
+            <ModeButtonsRow>
+              <ModeButton
+                type="button"
+                $active={selectedAction === 'epub'}
+                onClick={() => {
+                  setSelectedAction('epub');
+                  actionRef.current = 'epub';
+                }}
+              >
+                Drop mode: EPUB
+              </ModeButton>
+              <ModeButton
+                type="button"
+                $active={selectedAction === 'csv'}
+                onClick={() => {
+                  setSelectedAction('csv');
+                  actionRef.current = 'csv';
+                }}
+              >
+                Drop mode: CSV
+              </ModeButton>
+            </ModeButtonsRow>
+            <ButtonsRow>
+              <PrimaryButton type="button" onClick={() => openFilePicker('epub')}>
+                Choose PDF (EPUB)
+              </PrimaryButton>
+              <GhostButton type="button" onClick={() => openFilePicker('csv')}>
+                Extract tables (CSV)
+              </GhostButton>
+            </ButtonsRow>
             <HiddenInput
               ref={fileInputRef}
               type="file"
@@ -464,11 +538,11 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
         <Card>
           <div style={{ fontSize: '1.12rem', fontWeight: 700 }}>
             <i className="fas fa-check-circle" style={{ color: '#4ade80', marginRight: '0.55rem' }}></i>
-            EPUB generated successfully
+            {jobType === 'csv' ? 'CSV generated successfully' : 'EPUB generated successfully'}
           </div>
           <ButtonsRow>
             <PrimaryButton type="button" onClick={handleDownload}>
-              Download EPUB
+              {jobType === 'csv' ? 'Download CSV' : 'Download EPUB'}
             </PrimaryButton>
             <GhostButton
               type="button"
@@ -476,9 +550,12 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
                 setDownloadUrl('');
                 setProgress(0);
                 setConversionStatus('');
+                setDownloadName('converted.epub');
+                setJobType('epub');
+                setCsvStats({ tableCount: 0, rowCount: 0 });
               }}
             >
-              Convert another PDF
+              Start another file
             </GhostButton>
             {onBack && (
               <GhostButton type="button" onClick={onBack}>
@@ -486,6 +563,11 @@ const PdfUploader = ({ onEpubGenerated, onBack, user }) => {
               </GhostButton>
             )}
           </ButtonsRow>
+          {jobType === 'csv' && (
+            <Info>
+              Tables found: {csvStats.tableCount}. Rows exported: {csvStats.rowCount}.
+            </Info>
+          )}
         </Card>
       )}
     </Wrapper>

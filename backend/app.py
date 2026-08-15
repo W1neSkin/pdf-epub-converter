@@ -10,6 +10,7 @@ import logging
 import jwt
 from PyPDF2 import PdfReader
 from conversion_jobs import read_status, run_conversion_job, write_status
+from table_extractor import run_table_extraction_job
 from plan_limits import limits_for
 
 # Configure logging
@@ -76,6 +77,10 @@ class StatusResponse(BaseModel):
     current_page: Optional[int] = None
     total_words: Optional[int] = None
     book_id: Optional[str] = None
+    table_count: Optional[int] = None
+    row_count: Optional[int] = None
+    output_kind: Optional[str] = None
+    download_name: Optional[str] = None
 
 class HealthResponse(BaseModel):
     status: str
@@ -107,29 +112,13 @@ OUTPUT_FOLDER = '/tmp/outputs'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-@app.get("/", response_model=HealthResponse)
-async def health_check() -> HealthResponse:
-    """Health check endpoint"""
-    return HealthResponse(
-        status="healthy",
-        service="PDF to EPUB Converter API",
-        version="1.0.0"
-    )
 
-@app.post("/api/convert", response_model=ConversionResponse)
-async def convert_pdf_to_epub(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    request: Request = None,
-    user: Dict[str, Any] = Depends(get_current_user)
-) -> ConversionResponse:
-    """Accept a PDF and start conversion in the background."""
+def prepare_uploaded_pdf(file: UploadFile) -> tuple[str, str, int]:
+    """Save uploaded PDF, validate limits, and return (id, path, page_count)."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="File must be a PDF")
-    # Do not require content_type == application/pdf. Browsers and the
-    # gateway often send application/octet-stream for a real PDF.
 
     conversion_id = str(uuid.uuid4())
     pdf_path = os.path.join(UPLOAD_FOLDER, f"{conversion_id}.pdf")
@@ -156,6 +145,27 @@ async def convert_pdf_to_epub(
             status_code=400,
             detail=f"PDF has too many pages ({page_count}). Maximum is {MAX_PAGES}"
         )
+
+    return conversion_id, pdf_path, page_count
+
+@app.get("/", response_model=HealthResponse)
+async def health_check() -> HealthResponse:
+    """Health check endpoint"""
+    return HealthResponse(
+        status="healthy",
+        service="PDF to EPUB Converter API",
+        version="1.0.0"
+    )
+
+@app.post("/api/convert", response_model=ConversionResponse)
+async def convert_pdf_to_epub(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    request: Request = None,
+    user: Dict[str, Any] = Depends(get_current_user)
+) -> ConversionResponse:
+    """Accept a PDF and start conversion in the background."""
+    conversion_id, pdf_path, page_count = prepare_uploaded_pdf(file)
 
     output_dir = os.path.join(OUTPUT_FOLDER, conversion_id)
     os.makedirs(output_dir, exist_ok=True)
@@ -188,20 +198,73 @@ async def convert_pdf_to_epub(
         status="processing",
     )
 
+
+@app.post("/api/extract-tables", response_model=ConversionResponse)
+async def extract_pdf_tables_to_csv(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> ConversionResponse:
+    """Accept a PDF and start table extraction into CSV in the background."""
+    conversion_id, pdf_path, page_count = prepare_uploaded_pdf(file)
+    output_dir = os.path.join(OUTPUT_FOLDER, conversion_id)
+    os.makedirs(output_dir, exist_ok=True)
+    write_status(
+        output_dir,
+        status="processing",
+        progress=10,
+        message="Upload received. Table extraction queued...",
+        pages=page_count,
+    )
+
+    background_tasks.add_task(
+        run_table_extraction_job,
+        conversion_id,
+        pdf_path,
+        output_dir,
+        file.filename,
+    )
+    logger.info("Queued table extraction %s for %s", conversion_id, file.filename)
+
+    return ConversionResponse(
+        success=True,
+        conversion_id=conversion_id,
+        download_url=None,
+        pages=page_count,
+        total_words=0,
+        status="processing",
+    )
+
 @app.get("/api/download/{conversion_id}")
 async def download_epub(
     conversion_id: str,
     user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Download the generated EPUB file"""
+    """Download the generated output file (EPUB or CSV)."""
     conversion_id = require_conversion_id(conversion_id)
-    epub_path = os.path.join(OUTPUT_FOLDER, conversion_id, f"{conversion_id}.epub")
-    if not os.path.exists(epub_path):
-        raise HTTPException(status_code=404, detail="File not found")
+    output_dir = os.path.join(OUTPUT_FOLDER, conversion_id)
+    job = read_status(output_dir) or {}
+
+    output_filename = job.get("output_filename", f"{conversion_id}.epub")
+    output_path = os.path.join(output_dir, output_filename)
+    if not os.path.exists(output_path):
+        # Backward-compatible fallback for old jobs.
+        fallback = os.path.join(output_dir, f"{conversion_id}.epub")
+        if os.path.exists(fallback):
+            output_path = fallback
+            output_filename = os.path.basename(fallback)
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
+
+    media_type = job.get("output_mime")
+    if not media_type:
+        media_type = "application/epub+zip" if output_filename.lower().endswith(".epub") else "text/csv"
+
+    download_name = job.get("download_name") or output_filename
     return FileResponse(
-        path=epub_path,
-        filename=f"converted_{conversion_id}.epub",
-        media_type='application/epub+zip'
+        path=output_path,
+        filename=download_name,
+        media_type=media_type
     )
 
 @app.get("/api/status/{conversion_id}", response_model=StatusResponse)
@@ -225,6 +288,10 @@ async def get_conversion_status(
         current_page=job.get("current_page"),
         total_words=job.get("total_words"),
         book_id=job.get("book_id"),
+        table_count=job.get("table_count"),
+        row_count=job.get("row_count"),
+        output_kind=job.get("output_kind"),
+        download_name=job.get("download_name"),
     )
 
 if __name__ == '__main__':
