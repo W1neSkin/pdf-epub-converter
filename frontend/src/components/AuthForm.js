@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { AUTH_BASE_URL } from '../config';
+import { API_BASE_URL, AUTH_BASE_URL } from '../config';
 
 const Card = styled.div`
   background: rgba(15, 23, 42, 0.78);
@@ -108,37 +108,52 @@ const AuthForm = ({ onAuthSuccess }) => {
         : { email: formData.email, password: formData.password, full_name: formData.fullName };
 
       const retryableStatuses = new Set([429, 502, 503, 504]);
+      const baseUrls = Array.from(new Set([AUTH_BASE_URL, API_BASE_URL]));
       let response = null;
-      const attempts = 3;
+      const attemptsPerBase = 2;
 
-      for (let attempt = 1; attempt <= attempts; attempt += 1) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 45000);
-        try {
-          response = await fetch(`${AUTH_BASE_URL}${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: controller.signal,
-          });
-        } catch (requestError) {
+      for (let baseIndex = 0; baseIndex < baseUrls.length; baseIndex += 1) {
+        const baseUrl = baseUrls[baseIndex];
+        for (let attempt = 1; attempt <= attemptsPerBase; attempt += 1) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 45000);
+          try {
+            response = await fetch(`${baseUrl}${endpoint}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+              signal: controller.signal,
+            });
+          } catch (requestError) {
+            clearTimeout(timeoutId);
+            const canRetry = attempt < attemptsPerBase;
+            if (canRetry) {
+              setLoadingHint('Auth service is waking up. This can take 20-40 seconds...');
+              await wait(6000);
+              continue;
+            }
+            response = null;
+            break;
+          }
           clearTimeout(timeoutId);
-          const canRetry = attempt < attempts;
-          if (canRetry) {
+
+          if (response.ok) {
+            break;
+          }
+          if (retryableStatuses.has(response.status) && attempt < attemptsPerBase) {
             setLoadingHint('Auth service is waking up. This can take 20-40 seconds...');
             await wait(6000);
             continue;
           }
-          throw requestError;
-        }
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
           break;
         }
-        if (retryableStatuses.has(response.status) && attempt < attempts) {
-          setLoadingHint('Auth service is waking up. This can take 20-40 seconds...');
-          await wait(6000);
+
+        const shouldTryNextBase =
+          (!response || retryableStatuses.has(response.status)) &&
+          baseIndex < baseUrls.length - 1;
+        if (shouldTryNextBase) {
+          setLoadingHint('Primary auth route is busy. Trying fallback route...');
+          await wait(2000);
           continue;
         }
         break;
@@ -153,7 +168,14 @@ const AuthForm = ({ onAuthSuccess }) => {
       try {
         result = text ? JSON.parse(text) : {};
       } catch (parseError) {
+        if (!response.ok && response.status === 429) {
+          throw new Error('Auth service is still waking up. Please wait 30-60 seconds and try again.');
+        }
         throw new Error(`Server error ${response.status}`);
+      }
+
+      if (!response.ok && response.status === 429) {
+        throw new Error('Auth service is still waking up. Please wait 30-60 seconds and try again.');
       }
 
       if (!result.success) {
