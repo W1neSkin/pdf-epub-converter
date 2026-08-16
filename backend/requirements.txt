@@ -1,7 +1,9 @@
 pdfplumber==0.11.7
+camelot-py
 PyPDF2==3.0.1
 pdf2image==1.17.0
 Pillow==10.1.0
+pytesseract
 beautifulsoup4==4.12.2
 lxml==4.9.4
 fastapi==0.104.1

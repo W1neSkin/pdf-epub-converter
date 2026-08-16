@@ -79,6 +79,9 @@ class StatusResponse(BaseModel):
     book_id: Optional[str] = None
     table_count: Optional[int] = None
     row_count: Optional[int] = None
+    strategy_summary: Optional[Dict[str, int]] = None
+    used_camelot: Optional[bool] = None
+    used_ocr: Optional[bool] = None
     output_kind: Optional[str] = None
     download_name: Optional[str] = None
 
@@ -290,6 +293,9 @@ async def get_conversion_status(
         book_id=job.get("book_id"),
         table_count=job.get("table_count"),
         row_count=job.get("row_count"),
+        strategy_summary=job.get("strategy_summary"),
+        used_camelot=job.get("used_camelot"),
+        used_ocr=job.get("used_ocr"),
         output_kind=job.get("output_kind"),
         download_name=job.get("download_name"),
     )
