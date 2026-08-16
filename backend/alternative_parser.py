@@ -3,8 +3,9 @@
 Alternative PDF parser used by the conversion job.
 
 Goal:
-- Extract real Unicode text for reflowable EPUB output.
-- Render page images only when needed (no text or image-heavy page).
+- Keep page order and page count exactly as in the source PDF.
+- Render a full-page image for every page for fixed-layout EPUB output.
+- Still extract plain text for metadata/debug purposes.
 """
 
 import json
@@ -20,7 +21,7 @@ ProgressCallback = Optional[Callable[[int, str, int, int], None]]
 
 
 class AlternativePDFParser:
-    """PDF parser that prefers text extraction over full-page rasterization."""
+    """PDF parser that outputs strict one-image-per-page data."""
 
     def __init__(self) -> None:
         pass
@@ -28,6 +29,39 @@ class AlternativePDFParser:
     @staticmethod
     def _word_count(text: str) -> int:
         return len([token for token in text.split() if token.strip()])
+
+    @staticmethod
+    def _extract_text_boxes(page: Any) -> List[Dict[str, Any]]:
+        """
+        Extract positioned character boxes for invisible selectable text overlay.
+
+        Coordinates are kept in PDF page units (points):
+        - x0/x1 from left
+        - top/bottom from top
+        """
+        chars = list(getattr(page, "chars", []) or [])
+        boxes: List[Dict[str, Any]] = []
+        for char in chars:
+            text = str(char.get("text") or "")
+            if not text:
+                continue
+            x0 = float(char.get("x0", 0) or 0)
+            x1 = float(char.get("x1", 0) or 0)
+            top = float(char.get("top", 0) or 0)
+            bottom = float(char.get("bottom", 0) or 0)
+            if x1 <= x0 or bottom <= top:
+                continue
+            boxes.append(
+                {
+                    "text": text,
+                    "x0": x0,
+                    "x1": x1,
+                    "top": top,
+                    "bottom": bottom,
+                }
+            )
+        boxes.sort(key=lambda item: (round(float(item["top"]), 3), float(item["x0"])))
+        return boxes
 
     def extract_text_pdfplumber(self, pdf_path: str, on_progress: ProgressCallback = None) -> List[Dict[str, Any]]:
         """Extract page text and basic page facts using pdfplumber."""
@@ -37,11 +71,13 @@ class AlternativePDFParser:
             for page_num, page in enumerate(pdf.pages, 1):
                 # layout=True preserves line breaks better for forms/documents.
                 text = (page.extract_text(layout=True) or page.extract_text() or "").strip()
+                text_boxes = self._extract_text_boxes(page)
                 pages_data.append(
                     {
                         "page_number": page_num,
                         "text": text,
                         "word_count": self._word_count(text),
+                        "text_boxes": text_boxes,
                         "width": float(getattr(page, "width", 0) or 0),
                         "height": float(getattr(page, "height", 0) or 0),
                         "has_text": bool(text),
@@ -85,13 +121,13 @@ class AlternativePDFParser:
         output_dir: str,
         page_numbers: List[int],
         on_progress: ProgressCallback = None,
-    ) -> Dict[int, str]:
+    ) -> Dict[int, Dict[str, Any]]:
         """
         Render selected pages to PNG one-by-one.
 
         Rendering all pages at once can exceed free-host memory on long PDFs.
         """
-        image_paths: Dict[int, str] = {}
+        image_paths: Dict[int, Dict[str, Any]] = {}
         if not page_numbers:
             return image_paths
 
@@ -104,7 +140,7 @@ class AlternativePDFParser:
         for i, page_number in enumerate(selected, 1):
             images = convert_from_path(
                 pdf_path,
-                dpi=120,
+                dpi=150,
                 first_page=page_number,
                 last_page=page_number,
             )
@@ -113,9 +149,14 @@ class AlternativePDFParser:
 
             image_filename = f"page_{page_number:03d}.png"
             image_path = os.path.join(output_dir, image_filename)
-            images[0].save(image_path, "PNG")
-            images[0].close()
-            image_paths[page_number] = image_path
+            image_obj = images[0]
+            image_obj.save(image_path, "PNG")
+            image_obj.close()
+            image_paths[page_number] = {
+                "path": image_path,
+                "width_px": int(getattr(image_obj, "width", 0) or 0),
+                "height_px": int(getattr(image_obj, "height", 0) or 0),
+            }
 
             if on_progress:
                 percent = 32 + int(20 * i / total)
@@ -136,12 +177,8 @@ class AlternativePDFParser:
         # Some PDFs expose text only via fallback extraction.
         self.extract_text_pypdf2(pdf_path, pages_data)
 
-        # Render full-page image only when text is absent or page has image resources.
-        page_numbers_for_images = [
-            page["page_number"]
-            for page in pages_data
-            if (not page.get("has_text")) or page.get("has_images")
-        ]
+        # Strict visual mode: every PDF page must have an image in the EPUB.
+        page_numbers_for_images = [page["page_number"] for page in pages_data]
         image_map = self.convert_to_images(
             pdf_path=pdf_path,
             output_dir=output_dir,
@@ -149,10 +186,22 @@ class AlternativePDFParser:
             on_progress=on_progress,
         )
 
+        missing_pages = [n for n in page_numbers_for_images if n not in image_map]
+        if missing_pages:
+            missing_text = ", ".join(str(n) for n in missing_pages[:10])
+            if len(missing_pages) > 10:
+                missing_text += ", ..."
+            raise RuntimeError(
+                f"Could not render page image(s): {missing_text}. "
+                "Cannot build 1:1 visual EPUB without page images."
+            )
+
         for page in pages_data:
-            image_path = image_map.get(page["page_number"])
-            if image_path:
-                page["image_path"] = image_path
+            image_info = image_map.get(page["page_number"])
+            if image_info:
+                page["image_path"] = image_info.get("path")
+                page["image_width_px"] = image_info.get("width_px")
+                page["image_height_px"] = image_info.get("height_px")
 
         all_text = "\n\n".join(page.get("text", "") for page in pages_data if page.get("text"))
         total_words = sum(int(page.get("word_count", 0) or 0) for page in pages_data)

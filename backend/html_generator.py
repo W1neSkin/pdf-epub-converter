@@ -1,67 +1,114 @@
 #!/usr/bin/env python3
 """
-Generate simple reflowable XHTML pages for EPUB packaging.
+Generate fixed-layout XHTML pages for EPUB packaging.
 
-This generator intentionally writes real text nodes (<p>...</p>) instead of
-invisible overlay spans. It keeps text selectable in any EPUB reader.
+The target is visual parity with the source PDF:
+- one XHTML page per PDF page
+- one full-page image inside each XHTML page
 """
 
 import html
 import os
-import re
 from typing import Any, Dict, List
 
 
 class HTMLPageGenerator:
-    """Build one XHTML file per PDF page from parsed page data."""
+    """Build one fixed-layout XHTML file per PDF page."""
 
     def __init__(self) -> None:
         pass
 
     @staticmethod
-    def _split_paragraphs(text: str) -> List[str]:
+    def _build_text_overlay(
+        page_data: Dict[str, Any],
+        viewport_width: int,
+        viewport_height: int,
+        page_width: float,
+        page_height: float,
+    ) -> str:
         """
-        Split extracted text into readable paragraphs.
+        Build invisible positioned text boxes so selection matches page image.
 
-        Many form-like PDFs place one phrase per line; we keep line granularity
-        instead of aggressively merging all lines into one block.
+        Coordinates come from pdfplumber word boxes in PDF units.
         """
-        normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
-        if not normalized:
-            return []
+        boxes = page_data.get("text_boxes") or []
+        if not boxes or page_width <= 0 or page_height <= 0:
+            return ""
 
-        chunks = re.split(r"\n\s*\n", normalized)
-        paragraphs: List[str] = []
-        for chunk in chunks:
-            lines = [line.strip() for line in chunk.split("\n") if line.strip()]
-            paragraphs.extend(lines)
-        return paragraphs
+        scale_x = viewport_width / page_width
+        scale_y = viewport_height / page_height
+        overlay_lines = ['    <div class="text-overlay">']
+
+        for box in boxes:
+            raw_text = str(box.get("text") or "")
+            if raw_text == "":
+                continue
+            # Preserve selectable spaces; normal spaces can collapse in HTML.
+            if raw_text.isspace():
+                text = "\u00A0"
+            else:
+                text = raw_text
+            x0 = float(box.get("x0", 0) or 0)
+            x1 = float(box.get("x1", 0) or 0)
+            top = float(box.get("top", 0) or 0)
+            bottom = float(box.get("bottom", 0) or 0)
+            if x1 <= x0 or bottom <= top:
+                continue
+
+            left_px = x0 * scale_x
+            top_px = top * scale_y
+            width_px = max(0.5, (x1 - x0) * scale_x)
+            height_px = max(1.0, (bottom - top) * scale_y)
+            font_px = max(6.0, height_px * 0.9)
+
+            style = (
+                f"left:{left_px:.2f}px;"
+                f"top:{top_px:.2f}px;"
+                f"width:{width_px:.2f}px;"
+                f"height:{height_px:.2f}px;"
+                f"font-size:{font_px:.2f}px;"
+            )
+            overlay_lines.append(
+                f'      <span class="overlay-word" style="{style}">{html.escape(text)}</span>'
+            )
+
+        overlay_lines.append("    </div>")
+        return "\n".join(overlay_lines) + "\n"
 
     def generate_page_html(self, page_data: Dict[str, Any], output_path: str) -> str:
-        """Generate one XHTML page with selectable text and optional figure image."""
+        """Generate one XHTML page that renders only the source page image."""
         page_num = int(page_data.get("page_number", 0) or 0)
-        text = page_data.get("text", "") or ""
         image_path = page_data.get("image_path")
-        paragraphs = self._split_paragraphs(text)
-
-        text_html = ""
-        if paragraphs:
-            lines = []
-            for paragraph in paragraphs:
-                # Escape every paragraph to keep valid XHTML and preserve Unicode.
-                lines.append(f"        <p>{html.escape(paragraph)}</p>")
-            text_html = "\n".join(lines)
-        else:
-            text_html = '        <p class="empty-text">No extractable text on this page.</p>'
-
-        figure_html = ""
-        if image_path:
-            image_name = os.path.basename(image_path)
-            figure_html = (
-                "      <figure class=\"page-figure\">\n"
-                f"        <img src=\"images/{html.escape(image_name)}\" alt=\"Page {page_num} image\" />\n"
-                "      </figure>\n"
+        if not image_path:
+            raise ValueError(
+                f"Missing page image for page {page_num}. "
+                "Fixed-layout EPUB requires an image for every page."
             )
+
+        page_width = float(page_data.get("width", 0) or 0)
+        page_height = float(page_data.get("height", 0) or 0)
+        image_width_px = int(page_data.get("image_width_px", 0) or 0)
+        image_height_px = int(page_data.get("image_height_px", 0) or 0)
+        if image_width_px > 0 and image_height_px > 0:
+            # Use the exact rendered bitmap size for best text-overlay alignment.
+            viewport_width = image_width_px
+            viewport_height = image_height_px
+        elif page_width > 0 and page_height > 0:
+            # Fallback when bitmap size is unavailable.
+            viewport_width = max(600, int(page_width * 2))
+            viewport_height = max(800, int(page_height * 2))
+        else:
+            viewport_width = 1200
+            viewport_height = 1696
+
+        image_name = os.path.basename(image_path)
+        overlay_html = self._build_text_overlay(
+            page_data=page_data,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height,
+            page_width=page_width,
+            page_height=page_height,
+        )
 
         xhtml = (
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -70,15 +117,14 @@ class HTMLPageGenerator:
             "<head>\n"
             f"  <title>Page {page_num}</title>\n"
             "  <link rel=\"stylesheet\" type=\"text/css\" href=\"styles.css\"/>\n"
-            "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n"
+            f"  <meta name=\"viewport\" content=\"width={viewport_width},height={viewport_height}\"/>\n"
             "</head>\n"
             "<body>\n"
-            f"  <article class=\"pdf-page\" id=\"page-{page_num}\">\n"
-            f"    <h2 class=\"page-title\">Page {page_num}</h2>\n"
-            "    <section class=\"page-text\">\n"
-            f"{text_html}\n"
-            "    </section>\n"
-            f"{figure_html}"
+            f"  <article class=\"pdf-page fixed-layout-page\" id=\"page-{page_num}\" style=\"width:{viewport_width}px;height:{viewport_height}px;\">\n"
+            "    <figure class=\"page-figure fixed-layout-figure\">\n"
+            f"      <img class=\"page-image\" src=\"images/{html.escape(image_name)}\" alt=\"Page {page_num}\"/>\n"
+            "    </figure>\n"
+            f"{overlay_html}"
             "  </article>\n"
             "</body>\n"
             "</html>\n"

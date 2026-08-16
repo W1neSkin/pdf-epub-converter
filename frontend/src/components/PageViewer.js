@@ -9,9 +9,9 @@ const ViewerContainer = styled.div`
 `;
 
 const PageContent = styled.div`
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 1.25rem;
+  max-width: ${(props) => (props.$fixedLayout ? 'none' : '900px')};
+  margin: ${(props) => (props.$fixedLayout ? '0' : '0 auto')};
+  padding: ${(props) => (props.$fixedLayout ? '0' : '1.25rem')};
   color: #111827;
   line-height: 1.7;
   min-height: 100%;
@@ -29,6 +29,31 @@ const PageContent = styled.div`
   img {
     max-width: 100%;
     height: auto;
+  }
+
+  .fixed-layout-page {
+    position: relative;
+    margin: 0 auto;
+  }
+
+  .fixed-layout-page .fixed-layout-figure {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .fixed-layout-page .page-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .fixed-layout-page .text-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
   }
 
   ::selection {
@@ -60,6 +85,7 @@ function resolveZipPath(opfBasePath, pageHref, assetHref) {
 
 const PageViewer = ({ pages, currentPageIndex, epubData }) => {
   const [processedContent, setProcessedContent] = useState('');
+  const [isFixedLayout, setIsFixedLayout] = useState(false);
   const containerRef = useRef(null);
   const objectUrlsRef = useRef([]);
 
@@ -80,6 +106,8 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
       const parser = new DOMParser();
       const doc = parser.parseFromString(page.content, 'text/html');
       const bodyNode = doc.body || doc.documentElement;
+      const fixedLayoutDetected = Boolean(bodyNode.querySelector('.fixed-layout-page'));
+      setIsFixedLayout(fixedLayoutDetected);
 
       if (epubData && epubData.zip) {
         const images = bodyNode.querySelectorAll('img');
@@ -114,6 +142,7 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
     } catch (error) {
       console.error('Error processing page content:', error);
       setProcessedContent('<div>Error loading page content</div>');
+      setIsFixedLayout(false);
     }
   }, [cleanupObjectUrls, epubData]);
 
@@ -141,7 +170,7 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
 
   return (
     <ViewerContainer ref={containerRef}>
-      <PageContent dangerouslySetInnerHTML={{ __html: processedContent }} />
+      <PageContent $fixedLayout={isFixedLayout} dangerouslySetInnerHTML={{ __html: processedContent }} />
     </ViewerContainer>
   );
 };

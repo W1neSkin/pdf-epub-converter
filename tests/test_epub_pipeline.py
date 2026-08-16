@@ -33,6 +33,24 @@ def test_epub_contains_real_text_and_valid_zip_structure():
                 "text": page_text,
                 "word_count": 2,
                 "image_path": str(image_path),
+                "width": 595.0,
+                "height": 842.0,
+                "text_boxes": [
+                    {
+                        "text": "Регистрационный",
+                        "x0": 50.0,
+                        "x1": 180.0,
+                        "top": 70.0,
+                        "bottom": 85.0,
+                    },
+                    {
+                        "text": "знак",
+                        "x0": 190.0,
+                        "x1": 230.0,
+                        "top": 70.0,
+                        "bottom": 85.0,
+                    },
+                ],
             }
         ]
 
@@ -61,11 +79,16 @@ def test_epub_contains_real_text_and_valid_zip_structure():
 
             page_name = [name for name in names if name.startswith("EPUB/page_") and name.endswith(".xhtml")][0]
             page_xhtml = archive.read(page_name).decode("utf-8")
-            assert "Регистрационный знак" in page_xhtml
             assert "data-text" not in page_xhtml
-            assert "<p>" in page_xhtml
+            assert "class=\"page-figure fixed-layout-figure\"" in page_xhtml
+            assert "class=\"page-image\"" in page_xhtml
+            assert "class=\"text-overlay\"" in page_xhtml
+            assert "class=\"overlay-word\"" in page_xhtml
+            assert "Регистрационный" in page_xhtml
+            assert "<section class=\"page-text\">" not in page_xhtml
 
             content_opf = archive.read("EPUB/content.opf").decode("utf-8")
             assert "<dc:language>ru</dc:language>" in content_opf
+            assert "<meta property=\"rendition:layout\">pre-paginated</meta>" in content_opf
             assert '<item id="nav"' in content_opf
             assert '<itemref idref="nav"' not in content_opf
