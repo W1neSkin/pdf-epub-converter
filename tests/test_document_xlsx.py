@@ -81,6 +81,8 @@ def test_workbook_is_readable_and_contains_no_technical_columns(tmp_path):
     assert "Имя" in values
     assert "Сумма" in values
     assert "content_type" not in values
+    # Four content rows plus two simple section separators.
+    assert sheet.max_row == 6
 
 
 def test_export_job_creates_workbook_and_both_table_downloads(monkeypatch, tmp_path):

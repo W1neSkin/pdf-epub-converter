@@ -25,16 +25,6 @@ def _clean(value: object) -> str:
     return ILLEGAL_CHARACTERS_RE.sub("", str(value or "")).strip()
 
 
-def _coordinate_row(record: Dict[str, object], next_row: int) -> int:
-    """Map PDF points to worksheet rows while preventing overlaps."""
-    try:
-        top = float(record.get("top", 0) or 0)
-    except (TypeError, ValueError):
-        top = 0
-    positioned_row = int(top / 12) + 1 if top > 0 else next_row
-    return max(next_row, positioned_row)
-
-
 def _set_column_widths(sheet, widths: Dict[int, int], minimum_columns: int) -> None:
     """Apply practical widths so content is readable immediately."""
     for column_index in range(1, minimum_columns + 1):
@@ -54,6 +44,7 @@ def _write_page(sheet, records: List[Dict[str, object]]) -> None:
     content_columns = max(6, max_table_columns)
     widths: Dict[int, int] = defaultdict(int)
     next_row = 1
+    previous_group = None
 
     sheet.sheet_view.showGridLines = False
     sheet.sheet_view.zoomScale = 90
@@ -62,7 +53,19 @@ def _write_page(sheet, records: List[Dict[str, object]]) -> None:
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
 
     for record in records:
-        row_number = _coordinate_row(record, next_row)
+        content_type = str(record.get("content_type") or "")
+        table_index = int(record.get("table_index", 0) or 0)
+        current_group = (
+            ("table", table_index)
+            if content_type == "table"
+            else ("text", 0)
+        )
+        # Keep the workbook compact. One separator row is enough to show
+        # where narrative text ends or a different table begins.
+        if previous_group is not None and current_group != previous_group:
+            next_row += 1
+        row_number = next_row
+
         if record.get("content_type") == "text":
             text = _clean(record.get("text"))
             if text:
@@ -102,6 +105,7 @@ def _write_page(sheet, records: List[Dict[str, object]]) -> None:
                 )
             sheet.row_dimensions[row_number].height = 21
         next_row = row_number + 1
+        previous_group = current_group
 
     _set_column_widths(sheet, widths, content_columns)
 
