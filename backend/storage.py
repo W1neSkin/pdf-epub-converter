@@ -59,7 +59,8 @@ class CloudinaryStorage:
                 "secure_url": result["secure_url"],
                 "url": result["url"],
                 "bytes": result["bytes"],
-                "format": result["format"],
+                # Raw Cloudinary uploads may omit "format" from the response.
+                "format": result.get("format", "epub"),
                 "resource_type": result["resource_type"]
             }
             

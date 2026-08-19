@@ -33,3 +33,28 @@ def test_cloudinary_storage_uses_credentials_loaded_from_combined_url(monkeypatc
     cloudinary_storage = storage.CloudinaryStorage()
 
     assert cloudinary_storage.enabled is True
+
+
+def test_raw_epub_upload_does_not_require_format_field(monkeypatch, tmp_path):
+    """Cloudinary raw uploads commonly omit format even after a successful upload."""
+    epub_path = tmp_path / "result.epub"
+    epub_path.write_bytes(b"test epub")
+    cloudinary_storage = storage.CloudinaryStorage.__new__(storage.CloudinaryStorage)
+    cloudinary_storage.enabled = True
+
+    monkeypatch.setattr(
+        storage.cloudinary.uploader,
+        "upload",
+        lambda *_args, **_kwargs: {
+            "public_id": "epubs/test.epub",
+            "secure_url": "https://example.com/test.epub",
+            "url": "http://example.com/test.epub",
+            "bytes": 9,
+            "resource_type": "raw",
+        },
+    )
+
+    result = cloudinary_storage.upload_epub(str(epub_path), "test")
+
+    assert result is not None
+    assert result["format"] == "epub"
