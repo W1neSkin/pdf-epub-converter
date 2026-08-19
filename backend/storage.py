@@ -13,18 +13,21 @@ class CloudinaryStorage:
     
     def __init__(self):
         """Initialize Cloudinary with environment variables"""
-        cloudinary.config(
-            cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-            api_key=os.getenv('CLOUDINARY_API_KEY'),
-            api_secret=os.getenv('CLOUDINARY_API_SECRET'),
+        # cloudinary.config() first reads CLOUDINARY_URL. Individual variables
+        # remain supported for local setups that do not use the combined URL.
+        url_config = cloudinary.config()
+        configuration = cloudinary.config(
+            cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME') or url_config.cloud_name,
+            api_key=os.getenv('CLOUDINARY_API_KEY') or url_config.api_key,
+            api_secret=os.getenv('CLOUDINARY_API_SECRET') or url_config.api_secret,
             secure=True
         )
         
         # Verify configuration
         if not all([
-            os.getenv('CLOUDINARY_CLOUD_NAME'),
-            os.getenv('CLOUDINARY_API_KEY'),
-            os.getenv('CLOUDINARY_API_SECRET')
+            configuration.cloud_name,
+            configuration.api_key,
+            configuration.api_secret,
         ]):
             logger.warning("Cloudinary environment variables not set. File uploads will be disabled.")
             self.enabled = False

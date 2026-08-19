@@ -340,73 +340,83 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
       setProgress(5);
       setConversionStatus(action === 'csv' ? 'Uploaded. Extracting tables...' : 'Uploaded. Conversion started...');
 
-      const pollStatus = async (conversionId, attempt) => {
-        if (cancelledRef.current) return;
+      const pollStatus = async (conversionId) => {
+        for (let attempt = 1; attempt <= 300; attempt += 1) {
+          if (cancelledRef.current) return;
 
-        const statusResponse = await fetch(`${CONVERTER_BASE_URL}/api/status/${conversionId}`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-          signal,
-        });
-
-        if (!statusResponse.ok) {
-          if (statusResponse.status === 401) {
-            throw new Error(AUTH_EXPIRED);
-          }
-          if ([429, 502, 503].includes(statusResponse.status)) {
-            setConversionStatus('Server is busy. Checking again...');
-            setTimeout(() => pollStatus(conversionId, attempt + 1), 5000);
-            return;
-          }
-          if (statusResponse.status === 404 && attempt < 4) {
-            setConversionStatus('Job was restarting. Checking again...');
-            setTimeout(() => pollStatus(conversionId, attempt + 1), 3000);
-            return;
-          }
-          throw new Error(`Status check failed: ${statusResponse.status}`);
-        }
-
-        const statusData = await statusResponse.json();
-        if (statusData.message) {
-          setConversionStatus(statusData.message);
-        }
-        if (typeof statusData.progress === 'number') {
-          setProgress((current) => Math.max(current, statusData.progress));
-        }
-
-        if (statusData.status === 'completed' && statusData.download_url) {
-          setDownloadUrl(statusData.download_url);
-          setIsConverting(false);
-          setProgress(100);
-          const outputKind = statusData.output_kind || action;
-          setJobType(outputKind);
-          setDownloadName(
-            statusData.download_name ||
-            (outputKind === 'csv' ? 'tables.csv' : 'converted.epub')
-          );
-          setConversionStatus(outputKind === 'csv' ? 'CSV generated successfully.' : 'Conversion completed successfully.');
-          if (outputKind === 'csv') {
-            setCsvStats({
-              tableCount: Number(statusData.table_count || 0),
-              rowCount: Number(statusData.row_count || 0),
+          let statusResponse;
+          try {
+            statusResponse = await fetch(`${CONVERTER_BASE_URL}/api/status/${conversionId}`, {
+              headers: { Authorization: `Bearer ${user.token}` },
+              signal,
             });
+          } catch (error) {
+            if (error.name === 'AbortError' || cancelledRef.current) {
+              throw error;
+            }
+            setConversionStatus('Network issue. Checking conversion again...');
+            await waitWithAbort(3500, signal);
+            continue;
           }
-          if (onEpubGenerated && outputKind === 'epub') {
-            onEpubGenerated(statusData.download_url);
+
+          if (!statusResponse.ok) {
+            if (statusResponse.status === 401) {
+              throw new Error(AUTH_EXPIRED);
+            }
+            if ([429, 502, 503, 504].includes(statusResponse.status)) {
+              setConversionStatus('Server is busy. Checking again...');
+              await waitWithAbort(5000, signal);
+              continue;
+            }
+            if (statusResponse.status === 404 && attempt < 4) {
+              setConversionStatus('Job was restarting. Checking again...');
+              await waitWithAbort(3000, signal);
+              continue;
+            }
+            throw new Error(`Status check failed: ${statusResponse.status}`);
           }
-          return;
-        }
 
-        if (statusData.status === 'failed') {
-          throw new Error(statusData.message || 'Conversion failed.');
-        }
+          const statusData = await statusResponse.json();
+          if (statusData.message) {
+            setConversionStatus(statusData.message);
+          }
+          if (typeof statusData.progress === 'number') {
+            setProgress((current) => Math.max(current, statusData.progress));
+          }
 
-        if (attempt >= 300) {
-          throw new Error('Conversion timed out. Try again.');
+          if (statusData.status === 'completed' && statusData.download_url) {
+            setDownloadUrl(statusData.download_url);
+            setIsConverting(false);
+            setProgress(100);
+            const outputKind = statusData.output_kind || action;
+            setJobType(outputKind);
+            setDownloadName(
+              statusData.download_name ||
+              (outputKind === 'csv' ? 'tables.csv' : 'converted.epub')
+            );
+            setConversionStatus(outputKind === 'csv' ? 'CSV generated successfully.' : 'Conversion completed successfully.');
+            if (outputKind === 'csv') {
+              setCsvStats({
+                tableCount: Number(statusData.table_count || 0),
+                rowCount: Number(statusData.row_count || 0),
+              });
+            }
+            if (onEpubGenerated && outputKind === 'epub') {
+              onEpubGenerated(statusData.download_url);
+            }
+            return;
+          }
+
+          if (statusData.status === 'failed') {
+            throw new Error(statusData.message || 'Conversion failed.');
+          }
+
+          await waitWithAbort(3500, signal);
         }
-        setTimeout(() => pollStatus(conversionId, attempt + 1), 3500);
+        throw new Error('Conversion timed out. Try again.');
       };
 
-      await pollStatus(result.conversion_id, 1);
+      await pollStatus(result.conversion_id);
     } catch (error) {
       if (cancelledRef.current || error.name === 'AbortError') {
         return;
