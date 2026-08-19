@@ -31,7 +31,7 @@ def status_path(output_dir: str) -> str:
 
 
 def write_status(output_dir: str, **fields: Any) -> None:
-    """Merge fields into status.json so the poll endpoint can read progress."""
+    """Merge fields and atomically replace status.json for safe polling."""
     os.makedirs(output_dir, exist_ok=True)
     path = status_path(output_dir)
     current: Dict[str, Any] = {}
@@ -42,8 +42,12 @@ def write_status(output_dir: str, **fields: Any) -> None:
         except Exception:
             current = {}
     current.update(fields)
-    with open(path, "w", encoding="utf-8") as handle:
+    # Write beside the status file first. Polling can never observe
+    # a half-written JSON document while conversion progress is updated.
+    temporary_path = f"{path}.tmp"
+    with open(temporary_path, "w", encoding="utf-8") as handle:
         json.dump(current, handle)
+    os.replace(temporary_path, path)
 
 
 def read_status(output_dir: str) -> Optional[Dict[str, Any]]:

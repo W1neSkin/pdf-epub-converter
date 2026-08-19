@@ -1,8 +1,6 @@
 -- PDF to EPUB Converter Database Schema
--- This schema works with Supabase built-in auth system
-
--- Enable Row Level Security
-ALTER DATABASE postgres SET "app.jwt_secret" TO 'your-jwt-secret-here';
+-- This schema works with Supabase built-in auth system.
+-- Do not set app.jwt_secret here: hosted Supabase does not allow that.
 
 -- Create custom user profiles table (extends Supabase auth.users)
 CREATE TABLE public.user_profiles (

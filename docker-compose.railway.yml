@@ -1,0 +1,52 @@
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    environment:
+      PORT: "8080"
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service.railway.internal:8001
+      CONVERTER_SERVICE_URL: http://converter-service.railway.internal:8000
+      LIBRARY_SERVICE_URL: http://library-service.railway.internal:8002
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    environment:
+      PORT: "8001"
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
+      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+
+  converter-service:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.railway
+    environment:
+      PORT: "8000"
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
+      JWT_SECRET: ${JWT_SECRET}
+      CLOUDINARY_URL: ${CLOUDINARY_URL}
+      LIBRARY_SERVICE_URL: http://library-service.railway.internal:8002
+      PUBLIC_API_URL: ${PUBLIC_API_URL}
+
+  library-service:
+    build:
+      context: .
+      dockerfile: services/library-service/Dockerfile
+    environment:
+      PORT: "8002"
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
+      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      CLOUDINARY_URL: ${CLOUDINARY_URL}

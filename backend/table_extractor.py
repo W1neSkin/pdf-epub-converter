@@ -105,8 +105,11 @@ def write_status(output_dir: str, **fields: object) -> None:
         except Exception:
             current = {}
     current.update(fields)
-    with open(path, "w", encoding="utf-8") as handle:
+    # Replace atomically so status polling never reads partial JSON.
+    temporary_path = f"{path}.tmp"
+    with open(temporary_path, "w", encoding="utf-8") as handle:
         json.dump(current, handle)
+    os.replace(temporary_path, path)
 
 
 def _clean_cell(value: object) -> str:

@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        # A shared local .env also contains deployment-only values such as
+        # RAILWAY_API_TOKEN. Services should read their own keys and ignore the rest.
+        extra = "ignore"
 
 # Global settings instance
 settings = Settings()
