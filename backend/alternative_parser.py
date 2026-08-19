@@ -33,34 +33,58 @@ class AlternativePDFParser:
     @staticmethod
     def _extract_text_boxes(page: Any) -> List[Dict[str, Any]]:
         """
-        Extract positioned character boxes for invisible selectable text overlay.
+        Extract positioned characters plus real word/line separators.
 
         Coordinates are kept in PDF page units (points):
         - x0/x1 from left
         - top/bottom from top
         """
-        chars = list(getattr(page, "chars", []) or [])
+        words = page.extract_words(return_chars=True)
         boxes: List[Dict[str, Any]] = []
-        for char in chars:
-            text = str(char.get("text") or "")
-            if not text:
+
+        for word_index, word in enumerate(words):
+            for char in word.get("chars", []):
+                text = str(char.get("text") or "")
+                x0 = float(char.get("x0", 0) or 0)
+                x1 = float(char.get("x1", 0) or 0)
+                top = float(char.get("top", 0) or 0)
+                bottom = float(char.get("bottom", 0) or 0)
+                if text and x1 > x0 and bottom > top:
+                    boxes.append(
+                        {
+                            "text": text,
+                            "x0": x0,
+                            "x1": x1,
+                            "top": top,
+                            "bottom": bottom,
+                        }
+                    )
+
+            if word_index == len(words) - 1:
                 continue
-            x0 = float(char.get("x0", 0) or 0)
-            x1 = float(char.get("x1", 0) or 0)
-            top = float(char.get("top", 0) or 0)
-            bottom = float(char.get("bottom", 0) or 0)
-            if x1 <= x0 or bottom <= top:
-                continue
+
+            next_word = words[word_index + 1]
+            top = float(word.get("top", 0) or 0)
+            bottom = float(word.get("bottom", 0) or 0)
+            next_top = float(next_word.get("top", 0) or 0)
+            next_bottom = float(next_word.get("bottom", 0) or 0)
+            overlap = min(bottom, next_bottom) - max(top, next_top)
+            same_line = overlap >= min(bottom - top, next_bottom - next_top) * 0.5
+
+            # PDFs commonly omit whitespace glyphs. Add only separators that
+            # pdfplumber inferred between its words, never between characters.
+            x0 = float(word.get("x1", 0) or 0)
+            next_x0 = float(next_word.get("x0", x0) or x0)
             boxes.append(
                 {
-                    "text": text,
+                    "text": " " if same_line else "\n",
                     "x0": x0,
-                    "x1": x1,
+                    "x1": max(x0 + 0.5, next_x0) if same_line else x0 + 0.5,
                     "top": top,
                     "bottom": bottom,
                 }
             )
-        boxes.sort(key=lambda item: (round(float(item["top"]), 3), float(item["x0"])))
+
         return boxes
 
     def extract_text_pdfplumber(self, pdf_path: str, on_progress: ProgressCallback = None) -> List[Dict[str, Any]]:

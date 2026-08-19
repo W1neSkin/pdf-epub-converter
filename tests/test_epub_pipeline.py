@@ -11,6 +11,7 @@ BACKEND_DIR = ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from alternative_parser import AlternativePDFParser  # noqa: E402
 from epub_generator import EPUBGenerator  # noqa: E402
 from html_generator import HTMLPageGenerator  # noqa: E402
 
@@ -103,20 +104,43 @@ def test_character_overlay_copies_text_without_inserted_spaces():
         Image.new("RGB", (64, 64), color="white").save(image_path)
 
         source_text = "Рэгістрацыйны знак"
-        boxes = []
+        words = []
         left = 10.0
-        for character in source_text:
-            width = 3.0 if character == " " else 7.0
-            boxes.append(
+        for word_text in source_text.split():
+            chars = []
+            for character in word_text:
+                chars.append(
+                    {
+                        "text": character,
+                        "x0": left,
+                        "x1": left + 7.0,
+                        "top": 10.0,
+                        "bottom": 20.0,
+                    }
+                )
+                left += 7.0
+            words.append(
                 {
-                    "text": character,
-                    "x0": left,
-                    "x1": left + width,
+                    "text": word_text,
+                    "chars": chars,
+                    "x0": chars[0]["x0"],
+                    "x1": chars[-1]["x1"],
                     "top": 10.0,
                     "bottom": 20.0,
                 }
             )
-            left += width
+            left += 5.0
+
+        class FakePage:
+            """Return words with character geometry like pdfplumber does."""
+
+            @staticmethod
+            def extract_words(return_chars=False):
+                assert return_chars is True
+                return words
+
+        boxes = AlternativePDFParser._extract_text_boxes(FakePage())
+        assert "".join(box["text"] for box in boxes) == source_text
 
         output_path = tmp_path / "page_001.xhtml"
         HTMLPageGenerator().generate_page_html(
