@@ -1,6 +1,7 @@
 import sys
 import tempfile
 import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from PIL import Image
@@ -92,3 +93,46 @@ def test_epub_contains_real_text_and_valid_zip_structure():
             assert "<meta property=\"rendition:layout\">pre-paginated</meta>" in content_opf
             assert '<item id="nav"' in content_opf
             assert '<itemref idref="nav"' not in content_opf
+
+
+def test_character_overlay_copies_text_without_inserted_spaces():
+    """Formatting around positioned character spans must not change copied text."""
+    with tempfile.TemporaryDirectory(prefix="overlay_text_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        image_path = tmp_path / "page_001.png"
+        Image.new("RGB", (64, 64), color="white").save(image_path)
+
+        source_text = "Рэгістрацыйны знак"
+        boxes = []
+        left = 10.0
+        for character in source_text:
+            width = 3.0 if character == " " else 7.0
+            boxes.append(
+                {
+                    "text": character,
+                    "x0": left,
+                    "x1": left + width,
+                    "top": 10.0,
+                    "bottom": 20.0,
+                }
+            )
+            left += width
+
+        output_path = tmp_path / "page_001.xhtml"
+        HTMLPageGenerator().generate_page_html(
+            {
+                "page_number": 1,
+                "image_path": str(image_path),
+                "width": 200.0,
+                "height": 100.0,
+                "text_boxes": boxes,
+            },
+            str(output_path),
+        )
+
+        root = ET.fromstring(output_path.read_text(encoding="utf-8"))
+        namespace = {"xhtml": "http://www.w3.org/1999/xhtml"}
+        overlay = root.find(".//xhtml:div[@class='text-overlay']", namespace)
+
+        assert overlay is not None
+        assert "".join(overlay.itertext()) == source_text

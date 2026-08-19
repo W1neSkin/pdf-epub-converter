@@ -37,17 +37,15 @@ class HTMLPageGenerator:
 
         scale_x = viewport_width / page_width
         scale_y = viewport_height / page_height
-        overlay_lines = ['    <div class="text-overlay">']
+        # Do not insert formatting whitespace between character spans.
+        # Browser selection includes those text nodes and would otherwise copy
+        # "Р э г..." instead of the original "Рег...".
+        overlay_parts = ['    <div class="text-overlay">']
 
         for box in boxes:
             raw_text = str(box.get("text") or "")
             if raw_text == "":
                 continue
-            # Preserve selectable spaces; normal spaces can collapse in HTML.
-            if raw_text.isspace():
-                text = "\u00A0"
-            else:
-                text = raw_text
             x0 = float(box.get("x0", 0) or 0)
             x1 = float(box.get("x1", 0) or 0)
             top = float(box.get("top", 0) or 0)
@@ -68,12 +66,12 @@ class HTMLPageGenerator:
                 f"height:{height_px:.2f}px;"
                 f"font-size:{font_px:.2f}px;"
             )
-            overlay_lines.append(
-                f'      <span class="overlay-word" style="{style}">{html.escape(text)}</span>'
+            overlay_parts.append(
+                f'<span class="overlay-word" style="{style}">{html.escape(raw_text)}</span>'
             )
 
-        overlay_lines.append("    </div>")
-        return "\n".join(overlay_lines) + "\n"
+        overlay_parts.append("</div>\n")
+        return "".join(overlay_parts)
 
     def generate_page_html(self, page_data: Dict[str, Any], output_path: str) -> str:
         """Generate one XHTML page that renders only the source page image."""
