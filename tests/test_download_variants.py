@@ -19,7 +19,7 @@ def test_download_endpoint_selects_document_tables_and_archive(monkeypatch, tmp_
     output_dir = tmp_path / conversion_id
     output_dir.mkdir()
     filenames = {
-        "output_filename": f"{conversion_id}.csv",
+        "output_filename": f"{conversion_id}.xlsx",
         "tables_filename": f"{conversion_id}_tables.csv",
         "archive_filename": f"{conversion_id}_separate_tables.zip",
     }
@@ -30,7 +30,7 @@ def test_download_endpoint_selects_document_tables_and_archive(monkeypatch, tmp_
         json.dumps(
             {
                 **filenames,
-                "output_mime": "text/csv",
+                "output_mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "tables_mime": "text/csv",
                 "archive_mime": "application/zip",
             }

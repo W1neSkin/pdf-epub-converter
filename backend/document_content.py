@@ -1,7 +1,5 @@
-"""Build a flat, ordered CSV representation of PDF text and tables."""
+"""Collect PDF text and table rows in visual reading order."""
 
-import csv
-import os
 from typing import Dict, List, Sequence
 
 
@@ -149,42 +147,3 @@ def build_unpositioned_table_records(tables: List[Dict[str, object]]) -> List[Di
                 }
             )
     return records
-
-
-def write_document_csv(records: List[Dict[str, object]], output_path: str) -> int:
-    """Write ordered document records and return the exported row count."""
-    if not records:
-        raise ValueError("No text or tables found in this PDF")
-
-    max_columns = max((len(record.get("columns") or []) for record in records), default=0)
-    header = [
-        "page",
-        "content_order",
-        "content_type",
-        "table_index",
-        "row_index",
-        "strategy",
-        "text",
-        *[f"column_{index}" for index in range(1, max_columns + 1)],
-    ]
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(header)
-        for record in records:
-            columns = list(record.get("columns") or [])
-            columns.extend([""] * (max_columns - len(columns)))
-            writer.writerow(
-                [
-                    record.get("page", ""),
-                    record.get("content_order", ""),
-                    record.get("content_type", ""),
-                    record.get("table_index", ""),
-                    record.get("row_index", ""),
-                    record.get("strategy", ""),
-                    record.get("text", ""),
-                    *columns,
-                ]
-            )
-    return len(records)

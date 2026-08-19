@@ -265,7 +265,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     setProgress(0);
     setCsvStats({ documentRowCount: 0, tableCount: 0, rowCount: 0 });
     setJobType(action);
-    setDownloadName(action === 'csv' ? 'document.csv' : 'converted.epub');
+    setDownloadName(action === 'csv' ? 'document.xlsx' : 'converted.epub');
     setTablesDownloadName('tables.csv');
     setArchiveDownloadName('separate_tables.zip');
     setConversionStatus(action === 'csv' ? 'Starting document extractor...' : 'Starting converter...');
@@ -278,7 +278,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
       // 429 is mostly handled by API Gateway now; keep only one client retry for wake-up edge cases.
       const retryableStatuses = new Set([502, 503, 504]);
 
-      setConversionStatus(action === 'csv' ? 'Uploading PDF for CSV export...' : 'Uploading PDF...');
+      setConversionStatus(action === 'csv' ? 'Uploading PDF for Excel export...' : 'Uploading PDF...');
       const upload = new FormData();
       upload.append('file', file);
       const endpoint = action === 'csv' ? '/api/extract-tables' : '/api/convert';
@@ -404,7 +404,9 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             setJobType(outputKind);
             setDownloadName(
               statusData.download_name ||
-              (outputKind === 'csv' ? 'document.csv' : 'converted.epub')
+              (outputKind === 'xlsx' || outputKind === 'csv'
+                ? 'document.xlsx'
+                : 'converted.epub')
             );
             setTablesDownloadUrl(statusData.tables_download_url || '');
             setTablesDownloadName(
@@ -414,8 +416,12 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             setArchiveDownloadName(
               statusData.archive_download_name || 'separate_tables.zip'
             );
-            setConversionStatus(outputKind === 'csv' ? 'CSV generated successfully.' : 'Conversion completed successfully.');
-            if (outputKind === 'csv') {
+            setConversionStatus(
+              outputKind === 'xlsx' || outputKind === 'csv'
+                ? 'Excel document generated successfully.'
+                : 'Conversion completed successfully.'
+            );
+            if (outputKind === 'xlsx' || outputKind === 'csv') {
               setCsvStats({
                 documentRowCount: Number(statusData.document_row_count || 0),
                 tableCount: Number(statusData.table_count || 0),
@@ -556,11 +562,13 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     URL.revokeObjectURL(objectUrl);
   }, [onSessionExpired, user]);
 
+  const isDocumentExport = jobType === 'xlsx' || jobType === 'csv';
+
   return (
     <Wrapper>
       <HeaderRow>
         <h2 style={{ fontSize: '1.25rem' }}>
-          {selectedAction === 'csv' ? 'Export PDF content to CSV' : 'Convert PDF to EPUB'}
+          {selectedAction === 'csv' ? 'Export PDF content to Excel' : 'Convert PDF to EPUB'}
         </h2>
         {onBack && (
           <BackButton type="button" onClick={onBack}>
@@ -583,7 +591,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             <MainText>Drop a PDF here</MainText>
             <SubText>
               Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
-              {' '}Current drop mode: {selectedAction === 'csv' ? 'Document CSV' : 'EPUB'}.
+              {' '}Current drop mode: {selectedAction === 'csv' ? 'Excel document' : 'EPUB'}.
             </SubText>
 
             {fileInfo && (
@@ -613,7 +621,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
                   actionRef.current = 'csv';
                 }}
               >
-                Drop mode: CSV
+                Drop mode: Excel
               </ModeButton>
             </ModeButtonsRow>
             <ButtonsRow>
@@ -621,7 +629,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
                 Choose PDF (EPUB)
               </PrimaryButton>
               <GhostButton type="button" onClick={() => openFilePicker('csv')}>
-                Export document (CSV)
+                Export document (XLSX)
               </GhostButton>
             </ButtonsRow>
             <HiddenInput
@@ -653,16 +661,16 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
         <Card>
           <div style={{ fontSize: '1.12rem', fontWeight: 700 }}>
             <i className="fas fa-check-circle" style={{ color: '#4ade80', marginRight: '0.55rem' }}></i>
-            {jobType === 'csv' ? 'CSV generated successfully' : 'EPUB generated successfully'}
+            {isDocumentExport ? 'Excel document generated successfully' : 'EPUB generated successfully'}
           </div>
           <ButtonsRow>
             <PrimaryButton
               type="button"
               onClick={() => downloadFile(downloadUrl, downloadName)}
             >
-              {jobType === 'csv' ? 'Download full document (CSV)' : 'Download EPUB'}
+              {isDocumentExport ? 'Download readable document (XLSX)' : 'Download EPUB'}
             </PrimaryButton>
-            {jobType === 'csv' && tablesDownloadUrl && (
+            {isDocumentExport && tablesDownloadUrl && (
               <GhostButton
                 type="button"
                 onClick={() => downloadFile(tablesDownloadUrl, tablesDownloadName)}
@@ -670,7 +678,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
                 Download tables only (CSV)
               </GhostButton>
             )}
-            {jobType === 'csv' && archiveDownloadUrl && (
+            {isDocumentExport && archiveDownloadUrl && (
               <GhostButton
                 type="button"
                 onClick={() => downloadFile(archiveDownloadUrl, archiveDownloadName)}
@@ -701,7 +709,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
               </GhostButton>
             )}
           </ButtonsRow>
-          {jobType === 'csv' && (
+          {isDocumentExport && (
             <Info>
               Document rows: {csvStats.documentRowCount}. Tables found: {csvStats.tableCount}.
               {' '}Table rows: {csvStats.rowCount}.

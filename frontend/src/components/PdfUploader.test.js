@@ -102,7 +102,7 @@ describe('PdfUploader', () => {
     expect(convertCalls).toHaveLength(1);
   });
 
-  test('exports full document and table files in CSV mode', async () => {
+  test('exports readable workbook and table files', async () => {
     getPdfInfo.mockResolvedValue({
       name: 'sample.pdf',
       pages: 1,
@@ -126,8 +126,8 @@ describe('PdfUploader', () => {
             progress: 100,
             message: 'done',
             download_url: '/api/download/csv-1',
-            output_kind: 'csv',
-            download_name: 'sample_document.csv',
+            output_kind: 'xlsx',
+            download_name: 'sample_document.xlsx',
             document_row_count: 12,
             tables_download_url: '/api/download/csv-1?kind=tables',
             tables_download_name: 'sample_tables.csv',
@@ -140,16 +140,16 @@ describe('PdfUploader', () => {
     });
 
     const { container } = render(<PdfUploader user={user} onEpubGenerated={jest.fn()} onBack={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /Export document \(CSV\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Export document \(XLSX\)/i }));
 
     const input = container.querySelector('input[type="file"]');
     const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByText(/CSV generated successfully/i)).toBeInTheDocument();
+      expect(screen.getByText(/Excel document generated successfully/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Download full document \(CSV\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download readable document \(XLSX\)/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Download tables only \(CSV\)/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Download separate tables \(ZIP\)/i })).toBeInTheDocument();
     expect(screen.getByText(/Document rows: 12/i)).toBeInTheDocument();

@@ -1,7 +1,8 @@
-import csv
 import json
 import sys
 from pathlib import Path
+
+from openpyxl import load_workbook
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,7 +10,8 @@ BACKEND_DIR = ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from document_csv import build_page_records, write_document_csv  # noqa: E402
+from document_content import build_page_records  # noqa: E402
+from document_xlsx import write_document_xlsx  # noqa: E402
 import table_extractor  # noqa: E402
 
 
@@ -27,36 +29,9 @@ class FakePage:
         ]
 
 
-def test_page_records_keep_order_without_repeating_table_words():
-    tables = [
-        {
-            "table_index": 1,
-            "strategy": "lines_strict",
-            "bbox": [0, 40, 200, 100],
-            "rows": [["Имя", "Сумма"], ["Иван", "100"]],
-        }
-    ]
-
-    records = build_page_records(FakePage(), 3, tables)
-
-    assert [record["content_type"] for record in records] == [
-        "text",
-        "table",
-        "table",
-        "text",
-    ]
-    assert [record["content_order"] for record in records] == [1, 2, 3, 4]
-    narrative = " ".join(
-        str(record["text"])
-        for record in records
-        if record["content_type"] == "text"
-    )
-    assert narrative == "Кредитный отчёт Конец"
-    assert "Имя" not in narrative
-
-
-def test_document_csv_contains_unicode_text_and_table_columns(tmp_path):
-    records = build_page_records(
+def sample_records():
+    """Create one page containing narrative text and a table."""
+    return build_page_records(
         FakePage(),
         3,
         [
@@ -68,20 +43,48 @@ def test_document_csv_contains_unicode_text_and_table_columns(tmp_path):
             }
         ],
     )
-    output_path = tmp_path / "document.csv"
-
-    assert write_document_csv(records, str(output_path)) == 4
-
-    with open(output_path, encoding="utf-8-sig", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    assert rows[0]["text"] == "Кредитный отчёт"
-    assert rows[1]["content_type"] == "table"
-    assert rows[1]["column_1"] == "Имя"
-    assert rows[1]["column_2"] == "Сумма"
 
 
-def test_export_job_creates_document_and_both_table_downloads(monkeypatch, tmp_path):
-    """One extraction should expose all three useful CSV download formats."""
+def test_page_records_keep_order_without_repeating_table_words():
+    records = sample_records()
+
+    assert [record["content_type"] for record in records] == [
+        "text",
+        "table",
+        "table",
+        "text",
+    ]
+    narrative = " ".join(
+        str(record["text"])
+        for record in records
+        if record["content_type"] == "text"
+    )
+    assert narrative == "Кредитный отчёт Конец"
+    assert "Имя" not in narrative
+
+
+def test_workbook_is_readable_and_contains_no_technical_columns(tmp_path):
+    output_path = tmp_path / "document.xlsx"
+
+    assert write_document_xlsx(sample_records(), str(output_path), page_count=3) == 4
+
+    workbook = load_workbook(output_path)
+    assert workbook.sheetnames == ["Page 1", "Page 2", "Page 3"]
+    sheet = workbook["Page 3"]
+    values = [
+        str(cell.value)
+        for row in sheet.iter_rows()
+        for cell in row
+        if cell.value is not None
+    ]
+    assert "Кредитный отчёт" in values
+    assert "Имя" in values
+    assert "Сумма" in values
+    assert "content_type" not in values
+
+
+def test_export_job_creates_workbook_and_both_table_downloads(monkeypatch, tmp_path):
+    """One extraction should expose a workbook and both table formats."""
     pdf_path = tmp_path / "source.pdf"
     pdf_path.write_bytes(b"test")
     output_dir = tmp_path / "output"
@@ -131,7 +134,8 @@ def test_export_job_creates_document_and_both_table_downloads(monkeypatch, tmp_p
     status = json.loads((output_dir / "status.json").read_text(encoding="utf-8"))
     assert status["status"] == "completed"
     assert status["document_row_count"] == 2
-    assert status["download_name"] == "Отчёт_document.csv"
+    assert status["download_name"] == "Отчёт_document.xlsx"
+    assert status["output_kind"] == "xlsx"
     assert status["tables_download_url"].endswith("?kind=tables")
     assert status["archive_download_url"].endswith("?kind=archive")
     assert (output_dir / status["output_filename"]).exists()
@@ -140,7 +144,7 @@ def test_export_job_creates_document_and_both_table_downloads(monkeypatch, tmp_p
 
 
 def test_export_job_succeeds_when_pdf_has_text_but_no_tables(monkeypatch, tmp_path):
-    """A full-document CSV must not require the source PDF to contain tables."""
+    """A full-document workbook must not require tables."""
     pdf_path = tmp_path / "source.pdf"
     pdf_path.write_bytes(b"test")
     output_dir = tmp_path / "output"

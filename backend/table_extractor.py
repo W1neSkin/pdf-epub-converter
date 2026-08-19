@@ -21,11 +21,11 @@ from typing import Any, Dict, List, Tuple
 import pdfplumber
 from pdf2image import convert_from_path
 
-from document_csv import (
+from document_content import (
     build_page_records,
     build_unpositioned_table_records,
-    write_document_csv,
 )
+from document_xlsx import XLSX_MIME, write_document_xlsx
 
 try:
     import camelot  # type: ignore
@@ -661,7 +661,7 @@ def run_table_extraction_job(
     output_dir: str,
     original_filename: str,
 ) -> None:
-    """Background job: create a document CSV plus optional table-only files."""
+    """Background job: create a readable workbook plus table-only CSV files."""
     try:
         write_status(
             output_dir,
@@ -690,9 +690,13 @@ def run_table_extraction_job(
             used_ocr=used_ocr,
         )
 
-        document_filename = f"{conversion_id}.csv"
+        document_filename = f"{conversion_id}.xlsx"
         document_path = os.path.join(output_dir, document_filename)
-        document_row_count = write_document_csv(document_records, document_path)
+        document_row_count = write_document_xlsx(
+            document_records,
+            document_path,
+            page_count,
+        )
 
         table_row_count = 0
         tables_filename = None
@@ -713,12 +717,12 @@ def run_table_extraction_job(
             "https://pdf-converter-api-gateway.onrender.com",
         )
         source_name = os.path.splitext(original_filename or "tables")[0]
-        download_name = f"{source_name}_document.csv"
-        completion_message = "Document CSV is ready"
+        download_name = f"{source_name}_document.xlsx"
+        completion_message = "Excel document is ready"
         if used_ocr:
-            completion_message = "Document CSV is ready (OCR fallback used)"
+            completion_message = "Excel document is ready (OCR fallback used)"
         elif used_camelot:
-            completion_message = "Document CSV is ready (Camelot fallback used)"
+            completion_message = "Excel document is ready (Camelot fallback used)"
         write_status(
             output_dir,
             status="completed",
@@ -733,9 +737,9 @@ def run_table_extraction_job(
             used_ocr=used_ocr,
             file_size=os.path.getsize(document_path),
             download_url=f"{gateway}/api/download/{conversion_id}",
-            output_kind="csv",
+            output_kind="xlsx",
             output_filename=document_filename,
-            output_mime="text/csv",
+            output_mime=XLSX_MIME,
             download_name=download_name,
             tables_filename=tables_filename,
             tables_mime="text/csv" if tables_path else None,
