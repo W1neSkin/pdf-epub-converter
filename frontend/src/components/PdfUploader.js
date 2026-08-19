@@ -144,13 +144,21 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
   const [isConverting, setIsConverting] = useState(false);
   const [conversionStatus, setConversionStatus] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
+  const [tablesDownloadUrl, setTablesDownloadUrl] = useState('');
+  const [archiveDownloadUrl, setArchiveDownloadUrl] = useState('');
   const [progress, setProgress] = useState(0);
   const [limitError, setLimitError] = useState('');
   const [fileInfo, setFileInfo] = useState(null);
   const [selectedAction, setSelectedAction] = useState('epub');
   const [jobType, setJobType] = useState('epub');
   const [downloadName, setDownloadName] = useState('converted.epub');
-  const [csvStats, setCsvStats] = useState({ tableCount: 0, rowCount: 0 });
+  const [tablesDownloadName, setTablesDownloadName] = useState('tables.csv');
+  const [archiveDownloadName, setArchiveDownloadName] = useState('separate_tables.zip');
+  const [csvStats, setCsvStats] = useState({
+    documentRowCount: 0,
+    tableCount: 0,
+    rowCount: 0,
+  });
 
   const dragDepth = useRef(0);
   const fileInputRef = useRef(null);
@@ -251,12 +259,16 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     const { signal } = abortRef.current;
 
     setDownloadUrl('');
+    setTablesDownloadUrl('');
+    setArchiveDownloadUrl('');
     setIsConverting(true);
     setProgress(0);
-    setCsvStats({ tableCount: 0, rowCount: 0 });
+    setCsvStats({ documentRowCount: 0, tableCount: 0, rowCount: 0 });
     setJobType(action);
-    setDownloadName(action === 'csv' ? 'tables.csv' : 'converted.epub');
-    setConversionStatus(action === 'csv' ? 'Starting table extractor...' : 'Starting converter...');
+    setDownloadName(action === 'csv' ? 'document.csv' : 'converted.epub');
+    setTablesDownloadName('tables.csv');
+    setArchiveDownloadName('separate_tables.zip');
+    setConversionStatus(action === 'csv' ? 'Starting document extractor...' : 'Starting converter...');
 
     try {
       if (onEpubGenerated && action === 'epub') {
@@ -266,7 +278,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
       // 429 is mostly handled by API Gateway now; keep only one client retry for wake-up edge cases.
       const retryableStatuses = new Set([502, 503, 504]);
 
-      setConversionStatus(action === 'csv' ? 'Uploading PDF for table extraction...' : 'Uploading PDF...');
+      setConversionStatus(action === 'csv' ? 'Uploading PDF for CSV export...' : 'Uploading PDF...');
       const upload = new FormData();
       upload.append('file', file);
       const endpoint = action === 'csv' ? '/api/extract-tables' : '/api/convert';
@@ -338,7 +350,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
       }
 
       setProgress(5);
-      setConversionStatus(action === 'csv' ? 'Uploaded. Extracting tables...' : 'Uploaded. Conversion started...');
+      setConversionStatus(action === 'csv' ? 'Uploaded. Extracting text and tables...' : 'Uploaded. Conversion started...');
 
       const pollStatus = async (conversionId) => {
         for (let attempt = 1; attempt <= 300; attempt += 1) {
@@ -392,11 +404,20 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             setJobType(outputKind);
             setDownloadName(
               statusData.download_name ||
-              (outputKind === 'csv' ? 'tables.csv' : 'converted.epub')
+              (outputKind === 'csv' ? 'document.csv' : 'converted.epub')
+            );
+            setTablesDownloadUrl(statusData.tables_download_url || '');
+            setTablesDownloadName(
+              statusData.tables_download_name || 'tables.csv'
+            );
+            setArchiveDownloadUrl(statusData.archive_download_url || '');
+            setArchiveDownloadName(
+              statusData.archive_download_name || 'separate_tables.zip'
             );
             setConversionStatus(outputKind === 'csv' ? 'CSV generated successfully.' : 'Conversion completed successfully.');
             if (outputKind === 'csv') {
               setCsvStats({
+                documentRowCount: Number(statusData.document_row_count || 0),
                 tableCount: Number(statusData.table_count || 0),
                 rowCount: Number(statusData.row_count || 0),
               });
@@ -502,12 +523,12 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     fileInputRef.current?.click();
   }, []);
 
-  const handleDownload = useCallback(async () => {
-    if (!downloadUrl) return;
+  const downloadFile = useCallback(async (fileUrl, fileName) => {
+    if (!fileUrl) return;
 
-    const path = downloadUrl.startsWith('http')
-      ? downloadUrl
-      : `${CONVERTER_BASE_URL}${downloadUrl.startsWith('/') ? downloadUrl : `/${downloadUrl}`}`;
+    const path = fileUrl.startsWith('http')
+      ? fileUrl
+      : `${CONVERTER_BASE_URL}${fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`}`;
 
     const response = await fetch(path, {
       headers: { Authorization: `Bearer ${user?.token || ''}` },
@@ -528,18 +549,18 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
-    link.download = downloadName;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(objectUrl);
-  }, [downloadName, downloadUrl, onSessionExpired, user]);
+  }, [onSessionExpired, user]);
 
   return (
     <Wrapper>
       <HeaderRow>
         <h2 style={{ fontSize: '1.25rem' }}>
-          {selectedAction === 'csv' ? 'Extract PDF tables to CSV' : 'Convert PDF to EPUB'}
+          {selectedAction === 'csv' ? 'Export PDF content to CSV' : 'Convert PDF to EPUB'}
         </h2>
         {onBack && (
           <BackButton type="button" onClick={onBack}>
@@ -562,7 +583,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             <MainText>Drop a PDF here</MainText>
             <SubText>
               Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
-              {' '}Current drop mode: {selectedAction === 'csv' ? 'CSV tables' : 'EPUB'}.
+              {' '}Current drop mode: {selectedAction === 'csv' ? 'Document CSV' : 'EPUB'}.
             </SubText>
 
             {fileInfo && (
@@ -600,7 +621,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
                 Choose PDF (EPUB)
               </PrimaryButton>
               <GhostButton type="button" onClick={() => openFilePicker('csv')}>
-                Extract tables (CSV)
+                Export document (CSV)
               </GhostButton>
             </ButtonsRow>
             <HiddenInput
@@ -635,18 +656,41 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             {jobType === 'csv' ? 'CSV generated successfully' : 'EPUB generated successfully'}
           </div>
           <ButtonsRow>
-            <PrimaryButton type="button" onClick={handleDownload}>
-              {jobType === 'csv' ? 'Download CSV' : 'Download EPUB'}
+            <PrimaryButton
+              type="button"
+              onClick={() => downloadFile(downloadUrl, downloadName)}
+            >
+              {jobType === 'csv' ? 'Download full document (CSV)' : 'Download EPUB'}
             </PrimaryButton>
+            {jobType === 'csv' && tablesDownloadUrl && (
+              <GhostButton
+                type="button"
+                onClick={() => downloadFile(tablesDownloadUrl, tablesDownloadName)}
+              >
+                Download tables only (CSV)
+              </GhostButton>
+            )}
+            {jobType === 'csv' && archiveDownloadUrl && (
+              <GhostButton
+                type="button"
+                onClick={() => downloadFile(archiveDownloadUrl, archiveDownloadName)}
+              >
+                Download separate tables (ZIP)
+              </GhostButton>
+            )}
             <GhostButton
               type="button"
               onClick={() => {
                 setDownloadUrl('');
+                setTablesDownloadUrl('');
+                setArchiveDownloadUrl('');
                 setProgress(0);
                 setConversionStatus('');
                 setDownloadName('converted.epub');
+                setTablesDownloadName('tables.csv');
+                setArchiveDownloadName('separate_tables.zip');
                 setJobType('epub');
-                setCsvStats({ tableCount: 0, rowCount: 0 });
+                setCsvStats({ documentRowCount: 0, tableCount: 0, rowCount: 0 });
               }}
             >
               Start another file
@@ -659,7 +703,8 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
           </ButtonsRow>
           {jobType === 'csv' && (
             <Info>
-              Tables found: {csvStats.tableCount}. Rows exported: {csvStats.rowCount}.
+              Document rows: {csvStats.documentRowCount}. Tables found: {csvStats.tableCount}.
+              {' '}Table rows: {csvStats.rowCount}.
             </Info>
           )}
         </Card>

@@ -8,16 +8,24 @@ Pipeline order:
 """
 
 import csv
+import io
 import json
 import logging
 import os
 import re
+import zipfile
 from collections import Counter
 from statistics import median
 from typing import Any, Dict, List, Tuple
 
 import pdfplumber
 from pdf2image import convert_from_path
+
+from document_csv import (
+    build_page_records,
+    build_unpositioned_table_records,
+    write_document_csv,
+)
 
 try:
     import camelot  # type: ignore
@@ -170,7 +178,11 @@ def _table_score(rows: List[List[str]]) -> float:
     return score
 
 
-def _build_candidate(strategy_name: str, raw_tables: List[List[List[object]]]) -> Dict[str, object]:
+def _build_candidate(
+    strategy_name: str,
+    raw_tables: List[List[List[object]]],
+    table_bboxes: List[object] | None = None,
+) -> Dict[str, object]:
     """Normalize/scoring helper shared by pdfplumber, Camelot and OCR paths."""
     normalized_tables: List[Dict[str, object]] = []
     strategy_score = 0.0
@@ -179,7 +191,7 @@ def _build_candidate(strategy_name: str, raw_tables: List[List[List[object]]]) -
     max_columns = 0
     total_rows = 0
 
-    for raw_table in raw_tables:
+    for table_position, raw_table in enumerate(raw_tables):
         rows = _normalize_rows(raw_table)
         score = _table_score(rows)
         if score <= 0:
@@ -191,7 +203,12 @@ def _build_candidate(strategy_name: str, raw_tables: List[List[List[object]]]) -
         row_non_empty = sum(1 for row in rows for cell in row if cell)
         non_empty_cells += row_non_empty
         short_cells += sum(1 for row in rows for cell in row if cell and len(cell) <= 2)
-        normalized_tables.append({"rows": rows, "score": score})
+        normalized_table: Dict[str, object] = {"rows": rows, "score": score}
+        if table_bboxes and table_position < len(table_bboxes):
+            bbox = table_bboxes[table_position]
+            if bbox:
+                normalized_table["bbox"] = list(bbox)
+        normalized_tables.append(normalized_table)
         strategy_score += score
 
     short_ratio = short_cells / max(1, non_empty_cells)
@@ -217,11 +234,17 @@ def _build_candidate(strategy_name: str, raw_tables: List[List[List[object]]]) -
 
 def _extract_with_strategy(page: pdfplumber.page.Page, strategy_name: str, settings: Dict[str, object]) -> Dict[str, object]:
     """Extract and score tables on one page with a specific pdfplumber profile."""
-    raw_tables = page.extract_tables(table_settings=settings) or []
-    return _build_candidate(strategy_name, raw_tables)
+    found_tables = page.find_tables(table_settings=settings) or []
+    raw_tables = [table.extract() for table in found_tables]
+    table_bboxes = [table.bbox for table in found_tables]
+    return _build_candidate(strategy_name, raw_tables, table_bboxes)
 
 
-def _extract_with_camelot(pdf_path: str, page_number: int) -> List[Dict[str, object]]:
+def _extract_with_camelot(
+    pdf_path: str,
+    page_number: int,
+    page_height: float = 0,
+) -> List[Dict[str, object]]:
     """
     Extract candidate tables via Camelot as fallback.
 
@@ -244,6 +267,7 @@ def _extract_with_camelot(pdf_path: str, page_number: int) -> List[Dict[str, obj
             continue
 
         raw_tables: List[List[List[object]]] = []
+        table_bboxes: List[object] = []
         for table in tables:
             try:
                 # Camelot table.df is a pandas DataFrame.
@@ -251,8 +275,19 @@ def _extract_with_camelot(pdf_path: str, page_number: int) -> List[Dict[str, obj
             except Exception:
                 continue
             raw_tables.append(raw_rows)
+            # Camelot uses a bottom-left origin. pdfplumber uses top-left.
+            camelot_bbox = getattr(table, "_bbox", None)
+            if camelot_bbox and len(camelot_bbox) == 4 and page_height > 0:
+                x0, bottom, x1, top = camelot_bbox
+                table_bboxes.append(
+                    [float(x0), page_height - float(top), float(x1), page_height - float(bottom)]
+                )
+            else:
+                table_bboxes.append(None)
 
-        candidates.append(_build_candidate(f"camelot_{flavor}", raw_tables))
+        candidates.append(
+            _build_candidate(f"camelot_{flavor}", raw_tables, table_bboxes)
+        )
     return candidates
 
 
@@ -456,6 +491,7 @@ def extract_tables_from_pdf(pdf_path: str) -> Dict[str, object]:
     3) if still empty for full document and likely scanned, try OCR fallback
     """
     extracted: List[Dict[str, object]] = []
+    document_records: List[Dict[str, object]] = []
     page_count = 0
     diagnostics: List[Dict[str, object]] = []
     text_layer_pages = 0
@@ -475,7 +511,11 @@ def extract_tables_from_pdf(pdf_path: str) -> Dict[str, object]:
             # If pdfplumber found nothing, try Camelot fallback for this page.
             best = _select_best_candidate(candidates)
             if (not best or best["score"] <= 0) and camelot is not None:
-                camelot_candidates = _extract_with_camelot(pdf_path, page_index)
+                camelot_candidates = _extract_with_camelot(
+                    pdf_path,
+                    page_index,
+                    float(getattr(page, "height", 0) or 0),
+                )
                 if camelot_candidates:
                     used_camelot = True
                     candidates.extend(camelot_candidates)
@@ -492,18 +532,25 @@ def extract_tables_from_pdf(pdf_path: str) -> Dict[str, object]:
                 }
             )
 
-            if not best or best["score"] <= 0:
-                continue
-
-            for table_index, table_data in enumerate(best["tables"], 1):
-                extracted.append(
-                    {
+            page_tables: List[Dict[str, object]] = []
+            if best and best["score"] > 0:
+                for table_index, table_data in enumerate(best["tables"], 1):
+                    table_record = {
                         "page": page_index,
                         "table_index": table_index,
                         "strategy": best["strategy"],
                         "rows": table_data["rows"],
                     }
-                )
+                    if table_data.get("bbox"):
+                        table_record["bbox"] = table_data["bbox"]
+                    extracted.append(table_record)
+                    page_tables.append(table_record)
+
+            # Keep narrative text and table rows in one ordered document stream.
+            # Words inside bounded tables are excluded from narrative lines.
+            document_records.extend(
+                build_page_records(page, page_index, page_tables)
+            )
 
     text_layer_ratio = text_layer_pages / max(1, page_count)
     should_try_ocr = (not extracted) and (OCR_FORCE or text_layer_ratio < OCR_TEXT_LAYER_RATIO_THRESHOLD)
@@ -512,6 +559,13 @@ def extract_tables_from_pdf(pdf_path: str) -> Dict[str, object]:
         if ocr_tables:
             used_ocr = True
             extracted.extend(ocr_tables)
+            ocr_pages = {int(table.get("page", 0) or 0) for table in ocr_tables}
+            document_records = [
+                record
+                for record in document_records
+                if int(record.get("page", 0) or 0) not in ocr_pages
+            ]
+            document_records.extend(build_unpositioned_table_records(ocr_tables))
             diagnostics.append(
                 {
                     "page": "ocr_fallback",
@@ -524,9 +578,16 @@ def extract_tables_from_pdf(pdf_path: str) -> Dict[str, object]:
 
     strategy_counter = Counter(table.get("strategy") for table in extracted if table.get("strategy"))
     strategy_summary = dict(strategy_counter)
+    document_records.sort(
+        key=lambda record: (
+            int(record.get("page", 0) or 0),
+            int(record.get("content_order", 0) or 0),
+        )
+    )
     return {
         "pages": page_count,
         "tables": extracted,
+        "document_records": document_records,
         "strategy_summary": strategy_summary,
         "diagnostics": diagnostics,
         "used_camelot": used_camelot,
@@ -568,13 +629,39 @@ def write_tables_to_single_csv(tables: List[Dict[str, object]], output_path: str
     return total_rows
 
 
+def write_tables_to_zip(tables: List[Dict[str, object]], output_path: str) -> int:
+    """Write every detected table as its own UTF-8 CSV inside one ZIP file."""
+    if not tables:
+        raise ValueError("No tables found in this PDF")
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for table in tables:
+            rows = table.get("rows", [])
+            max_columns = max((len(row) for row in rows), default=0)
+            if max_columns == 0:
+                continue
+
+            buffer = io.StringIO(newline="")
+            writer = csv.writer(buffer)
+            for row in rows:
+                writer.writerow(row + ([""] * (max_columns - len(row))))
+
+            page = int(table.get("page", 0) or 0)
+            table_index = int(table.get("table_index", 0) or 0)
+            filename = f"page_{page:03d}_table_{table_index:02d}.csv"
+            archive.writestr(filename, ("\ufeff" + buffer.getvalue()).encode("utf-8"))
+
+    return len(tables)
+
+
 def run_table_extraction_job(
     conversion_id: str,
     pdf_path: str,
     output_dir: str,
     original_filename: str,
 ) -> None:
-    """Background job: extract tables from PDF and save one CSV file."""
+    """Background job: create a document CSV plus optional table-only files."""
     try:
         write_status(
             output_dir,
@@ -586,6 +673,7 @@ def run_table_extraction_job(
         result = extract_tables_from_pdf(pdf_path)
         page_count = int(result.get("pages", 0) or 0)
         tables = result.get("tables", [])
+        document_records = result.get("document_records", [])
         strategy_summary = result.get("strategy_summary", {})
         used_camelot = bool(result.get("used_camelot"))
         used_ocr = bool(result.get("used_ocr"))
@@ -602,20 +690,35 @@ def run_table_extraction_job(
             used_ocr=used_ocr,
         )
 
-        csv_path = os.path.join(output_dir, f"{conversion_id}.csv")
-        total_rows = write_tables_to_single_csv(tables, csv_path)
+        document_filename = f"{conversion_id}.csv"
+        document_path = os.path.join(output_dir, document_filename)
+        document_row_count = write_document_csv(document_records, document_path)
+
+        table_row_count = 0
+        tables_filename = None
+        tables_path = None
+        archive_filename = None
+        archive_path = None
+        if tables:
+            tables_filename = f"{conversion_id}_tables.csv"
+            tables_path = os.path.join(output_dir, tables_filename)
+            table_row_count = write_tables_to_single_csv(tables, tables_path)
+
+            archive_filename = f"{conversion_id}_separate_tables.zip"
+            archive_path = os.path.join(output_dir, archive_filename)
+            write_tables_to_zip(tables, archive_path)
 
         gateway = os.getenv(
             "PUBLIC_API_URL",
             "https://pdf-converter-api-gateway.onrender.com",
         )
         source_name = os.path.splitext(original_filename or "tables")[0]
-        download_name = f"{source_name}_tables.csv"
-        completion_message = "CSV is ready"
+        download_name = f"{source_name}_document.csv"
+        completion_message = "Document CSV is ready"
         if used_ocr:
-            completion_message = "CSV is ready (OCR fallback used)"
+            completion_message = "Document CSV is ready (OCR fallback used)"
         elif used_camelot:
-            completion_message = "CSV is ready (Camelot fallback used)"
+            completion_message = "Document CSV is ready (Camelot fallback used)"
         write_status(
             output_dir,
             status="completed",
@@ -623,22 +726,46 @@ def run_table_extraction_job(
             message=completion_message,
             pages=page_count,
             table_count=len(tables),
-            row_count=total_rows,
+            row_count=table_row_count,
+            document_row_count=document_row_count,
             strategy_summary=strategy_summary,
             used_camelot=used_camelot,
             used_ocr=used_ocr,
-            file_size=os.path.getsize(csv_path),
+            file_size=os.path.getsize(document_path),
             download_url=f"{gateway}/api/download/{conversion_id}",
             output_kind="csv",
-            output_filename=f"{conversion_id}.csv",
+            output_filename=document_filename,
             output_mime="text/csv",
             download_name=download_name,
+            tables_filename=tables_filename,
+            tables_mime="text/csv" if tables_path else None,
+            tables_download_url=(
+                f"{gateway}/api/download/{conversion_id}?kind=tables"
+                if tables_path
+                else None
+            ),
+            tables_download_name=(
+                f"{source_name}_tables.csv" if tables_path else None
+            ),
+            tables_size=os.path.getsize(tables_path) if tables_path else None,
+            archive_filename=archive_filename,
+            archive_mime="application/zip" if archive_path else None,
+            archive_download_url=(
+                f"{gateway}/api/download/{conversion_id}?kind=archive"
+                if archive_path
+                else None
+            ),
+            archive_download_name=(
+                f"{source_name}_separate_tables.zip" if archive_path else None
+            ),
+            archive_size=os.path.getsize(archive_path) if archive_path else None,
         )
         logger.info(
-            "Table extraction %s completed: %s tables, %s rows, strategies=%s, camelot=%s, ocr=%s",
+            "Document export %s completed: %s records, %s tables, %s table rows, strategies=%s, camelot=%s, ocr=%s",
             conversion_id,
+            document_row_count,
             len(tables),
-            total_rows,
+            table_row_count,
             strategy_summary,
             used_camelot,
             used_ocr,

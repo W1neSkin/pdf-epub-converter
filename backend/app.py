@@ -79,11 +79,18 @@ class StatusResponse(BaseModel):
     book_id: Optional[str] = None
     table_count: Optional[int] = None
     row_count: Optional[int] = None
+    document_row_count: Optional[int] = None
     strategy_summary: Optional[Dict[str, int]] = None
     used_camelot: Optional[bool] = None
     used_ocr: Optional[bool] = None
     output_kind: Optional[str] = None
     download_name: Optional[str] = None
+    tables_download_url: Optional[str] = None
+    tables_download_name: Optional[str] = None
+    tables_size: Optional[int] = None
+    archive_download_url: Optional[str] = None
+    archive_download_name: Optional[str] = None
+    archive_size: Optional[int] = None
 
 class HealthResponse(BaseModel):
     status: str
@@ -241,6 +248,7 @@ async def extract_pdf_tables_to_csv(
 @app.get("/api/download/{conversion_id}")
 async def download_epub(
     conversion_id: str,
+    kind: str = "primary",
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Download the generated output file (EPUB or CSV)."""
@@ -248,9 +256,24 @@ async def download_epub(
     output_dir = os.path.join(OUTPUT_FOLDER, conversion_id)
     job = read_status(output_dir) or {}
 
-    output_filename = job.get("output_filename", f"{conversion_id}.epub")
+    if kind not in {"primary", "document", "tables", "archive"}:
+        raise HTTPException(status_code=400, detail="Unknown download kind")
+
+    variant = kind if kind in {"tables", "archive"} else "output"
+    filename_key = f"{variant}_filename"
+    mime_key = f"{variant}_mime"
+    name_key = f"{variant}_download_name" if variant != "output" else "download_name"
+    output_filename = job.get(filename_key)
+    is_alternate = variant in {"tables", "archive"}
+    if not output_filename:
+        if is_alternate:
+            raise HTTPException(status_code=404, detail="Requested export not found")
+        output_filename = f"{conversion_id}.epub"
+
     output_path = os.path.join(output_dir, output_filename)
     if not os.path.exists(output_path):
+        if is_alternate:
+            raise HTTPException(status_code=404, detail="Requested export not found")
         # Backward-compatible fallback for old jobs.
         fallback = os.path.join(output_dir, f"{conversion_id}.epub")
         if os.path.exists(fallback):
@@ -259,11 +282,16 @@ async def download_epub(
         else:
             raise HTTPException(status_code=404, detail="File not found")
 
-    media_type = job.get("output_mime")
+    media_type = job.get(mime_key)
     if not media_type:
-        media_type = "application/epub+zip" if output_filename.lower().endswith(".epub") else "text/csv"
+        if output_filename.lower().endswith(".epub"):
+            media_type = "application/epub+zip"
+        elif output_filename.lower().endswith(".zip"):
+            media_type = "application/zip"
+        else:
+            media_type = "text/csv"
 
-    download_name = job.get("download_name") or output_filename
+    download_name = job.get(name_key) or output_filename
     return FileResponse(
         path=output_path,
         filename=download_name,
@@ -293,11 +321,18 @@ async def get_conversion_status(
         book_id=job.get("book_id"),
         table_count=job.get("table_count"),
         row_count=job.get("row_count"),
+        document_row_count=job.get("document_row_count"),
         strategy_summary=job.get("strategy_summary"),
         used_camelot=job.get("used_camelot"),
         used_ocr=job.get("used_ocr"),
         output_kind=job.get("output_kind"),
         download_name=job.get("download_name"),
+        tables_download_url=job.get("tables_download_url"),
+        tables_download_name=job.get("tables_download_name"),
+        tables_size=job.get("tables_size"),
+        archive_download_url=job.get("archive_download_url"),
+        archive_download_name=job.get("archive_download_name"),
+        archive_size=job.get("archive_size"),
     )
 
 if __name__ == '__main__':

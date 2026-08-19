@@ -102,7 +102,7 @@ describe('PdfUploader', () => {
     expect(convertCalls).toHaveLength(1);
   });
 
-  test('extracts tables in CSV mode with dedicated endpoint', async () => {
+  test('exports full document and table files in CSV mode', async () => {
     getPdfInfo.mockResolvedValue({
       name: 'sample.pdf',
       pages: 1,
@@ -127,7 +127,12 @@ describe('PdfUploader', () => {
             message: 'done',
             download_url: '/api/download/csv-1',
             output_kind: 'csv',
-            download_name: 'sample_tables.csv',
+            download_name: 'sample_document.csv',
+            document_row_count: 12,
+            tables_download_url: '/api/download/csv-1?kind=tables',
+            tables_download_name: 'sample_tables.csv',
+            archive_download_url: '/api/download/csv-1?kind=archive',
+            archive_download_name: 'sample_separate_tables.zip',
           }),
         });
       }
@@ -135,7 +140,7 @@ describe('PdfUploader', () => {
     });
 
     const { container } = render(<PdfUploader user={user} onEpubGenerated={jest.fn()} onBack={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /Extract tables \(CSV\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Export document \(CSV\)/i }));
 
     const input = container.querySelector('input[type="file"]');
     const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
@@ -144,6 +149,10 @@ describe('PdfUploader', () => {
     await waitFor(() => {
       expect(screen.getByText(/CSV generated successfully/i)).toBeInTheDocument();
     });
+    expect(screen.getByRole('button', { name: /Download full document \(CSV\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download tables only \(CSV\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download separate tables \(ZIP\)/i })).toBeInTheDocument();
+    expect(screen.getByText(/Document rows: 12/i)).toBeInTheDocument();
 
     const csvCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('/api/extract-tables'));
     expect(csvCalls).toHaveLength(1);

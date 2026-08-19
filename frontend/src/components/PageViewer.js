@@ -9,12 +9,22 @@ const ViewerContainer = styled.div`
 `;
 
 const PageContent = styled.div`
+  width: ${(props) => (
+    props.$fixedLayout && props.$pageWidth
+      ? `${props.$pageWidth * props.$pageScale}px`
+      : 'auto'
+  )};
+  height: ${(props) => (
+    props.$fixedLayout && props.$pageHeight
+      ? `${props.$pageHeight * props.$pageScale}px`
+      : 'auto'
+  )};
   max-width: ${(props) => (props.$fixedLayout ? 'none' : '900px')};
-  margin: ${(props) => (props.$fixedLayout ? '0' : '0 auto')};
+  margin: 0 auto;
   padding: ${(props) => (props.$fixedLayout ? '0' : '1.25rem')};
   color: #111827;
   line-height: 1.7;
-  min-height: 100%;
+  min-height: ${(props) => (props.$fixedLayout ? '0' : '100%')};
 
   .page-title {
     margin: 0 0 1rem;
@@ -33,7 +43,9 @@ const PageContent = styled.div`
 
   .fixed-layout-page {
     position: relative;
-    margin: 0 auto;
+    margin: 0;
+    transform: scale(${(props) => props.$pageScale});
+    transform-origin: top left;
   }
 
   .fixed-layout-page .fixed-layout-figure {
@@ -61,6 +73,13 @@ const PageContent = styled.div`
   }
 `;
 
+export function calculatePageScale(availableWidth, pageWidth) {
+  if (!availableWidth || !pageWidth || availableWidth <= 0 || pageWidth <= 0) {
+    return 1;
+  }
+  return Math.min(1, availableWidth / pageWidth);
+}
+
 function resolveZipPath(opfBasePath, pageHref, assetHref) {
   const cleanAsset = (assetHref || '').split('#')[0].split('?')[0];
   if (!cleanAsset) {
@@ -86,6 +105,8 @@ function resolveZipPath(opfBasePath, pageHref, assetHref) {
 const PageViewer = ({ pages, currentPageIndex, epubData }) => {
   const [processedContent, setProcessedContent] = useState('');
   const [isFixedLayout, setIsFixedLayout] = useState(false);
+  const [fixedPageSize, setFixedPageSize] = useState({ width: 0, height: 0 });
+  const [availableWidth, setAvailableWidth] = useState(0);
   const containerRef = useRef(null);
   const objectUrlsRef = useRef([]);
 
@@ -106,8 +127,17 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
       const parser = new DOMParser();
       const doc = parser.parseFromString(page.content, 'text/html');
       const bodyNode = doc.body || doc.documentElement;
-      const fixedLayoutDetected = Boolean(bodyNode.querySelector('.fixed-layout-page'));
+      const fixedPage = bodyNode.querySelector('.fixed-layout-page');
+      const fixedLayoutDetected = Boolean(fixedPage);
       setIsFixedLayout(fixedLayoutDetected);
+      setFixedPageSize(
+        fixedPage
+          ? {
+              width: Number.parseFloat(fixedPage.style.width) || 0,
+              height: Number.parseFloat(fixedPage.style.height) || 0,
+            }
+          : { width: 0, height: 0 }
+      );
 
       if (epubData && epubData.zip) {
         const images = bodyNode.querySelectorAll('img');
@@ -156,6 +186,27 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
     return () => cleanupObjectUrls();
   }, [cleanupObjectUrls]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return undefined;
+
+    const updateWidth = () => setAvailableWidth(Math.max(0, container.clientWidth - 2));
+    updateWidth();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth);
+      return () => window.removeEventListener('resize', updateWidth);
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const pageScale = isFixedLayout
+    ? calculatePageScale(availableWidth, fixedPageSize.width)
+    : 1;
+
   if (!pages || pages.length === 0) {
     return (
       <ViewerContainer>
@@ -170,7 +221,14 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
 
   return (
     <ViewerContainer ref={containerRef}>
-      <PageContent $fixedLayout={isFixedLayout} dangerouslySetInnerHTML={{ __html: processedContent }} />
+      <PageContent
+        $fixedLayout={isFixedLayout}
+        $pageWidth={fixedPageSize.width}
+        $pageHeight={fixedPageSize.height}
+        $pageScale={pageScale}
+        data-page-scale={pageScale}
+        dangerouslySetInnerHTML={{ __html: processedContent }}
+      />
     </ViewerContainer>
   );
 };
