@@ -209,7 +209,7 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
 
   if (!pages || pages.length === 0) {
     return (
-      <ViewerContainer>
+      <ViewerContainer ref={containerRef}>
         <PageContent>
           <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
             No pages to display
