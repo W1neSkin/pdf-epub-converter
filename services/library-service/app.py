@@ -7,7 +7,7 @@ Uses Supabase for data storage and Cloudinary for file storage
 import os
 import sys
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 import math
@@ -26,6 +26,7 @@ import jwt
 # Add shared directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from shared.config import LibraryServiceSettings
+from shared.datetime_utils import is_after_utc
 from shared.models import (
     UserBook, UserBookCreate, UserBookUpdate, UserBooksResponse, UserBookResponse,
     LibraryStats, LibraryStatsResponse, SharedBook, SharedBookCreate, SharedBookResponse,
@@ -113,6 +114,7 @@ def calculate_pagination(page: int, limit: int, total: int) -> Dict[str, Any]:
         "has_next": has_next,
         "has_prev": has_prev
     }
+
 
 # Routes
 
@@ -463,12 +465,12 @@ async def get_library_statistics(user: Dict[str, Any] = Depends(get_current_user
         total_pages = sum(book.get('pages', 0) for book in books if book.get('pages'))
         total_words = sum(book.get('words', 0) for book in books if book.get('words'))
         
-        # Calculate recent conversions (last 30 days)
-        from datetime import timedelta
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        # Supabase returns timezone-aware ISO timestamps. Keep the cutoff
+        # timezone-aware too so an existing book cannot break all statistics.
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         recent_conversions = len([
-            book for book in books 
-            if book.get('created_at') and datetime.fromisoformat(book['created_at'].replace('Z', '+00:00')) > thirty_days_ago
+            book for book in books
+            if book.get('created_at') and is_after_utc(book['created_at'], thirty_days_ago)
         ])
         
         # Calculate storage usage percentage
