@@ -66,8 +66,11 @@ class HTMLPageGenerator:
                 f"height:{height_px:.2f}px;"
                 f"font-size:{font_px:.2f}px;"
             )
+            classes = "overlay-word"
+            if box.get("is_separator"):
+                classes += " overlay-separator"
             overlay_parts.append(
-                f'<span class="overlay-word" style="{style}">{html.escape(raw_text)}</span>'
+                f'<span class="{classes}" style="{style}">{html.escape(raw_text)}</span>'
             )
 
         overlay_parts.append("</div>\n")

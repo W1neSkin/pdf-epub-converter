@@ -95,6 +95,11 @@ def test_epub_contains_real_text_and_valid_zip_structure():
             assert '<item id="nav"' in content_opf
             assert '<itemref idref="nav"' not in content_opf
 
+            stylesheet = archive.read("EPUB/styles.css").decode("utf-8")
+            assert ".overlay-separator" in stylesheet
+            assert "pointer-events: none;" in stylesheet
+            assert "pointer-events: auto;" in stylesheet
+
 
 def test_character_overlay_copies_text_without_inserted_spaces():
     """Formatting around positioned character spans must not change copied text."""
@@ -141,6 +146,9 @@ def test_character_overlay_copies_text_without_inserted_spaces():
 
         boxes = AlternativePDFParser._extract_text_boxes(FakePage())
         assert "".join(box["text"] for box in boxes) == source_text
+        separators = [box for box in boxes if box.get("is_separator")]
+        assert len(separators) == 1
+        assert separators[0]["x1"] - separators[0]["x0"] == 0.5
 
         output_path = tmp_path / "page_001.xhtml"
         HTMLPageGenerator().generate_page_html(
@@ -160,3 +168,9 @@ def test_character_overlay_copies_text_without_inserted_spaces():
 
         assert overlay is not None
         assert "".join(overlay.itertext()) == source_text
+        separator_spans = [
+            span
+            for span in overlay
+            if "overlay-separator" in span.attrib.get("class", "")
+        ]
+        assert len(separator_spans) == 1

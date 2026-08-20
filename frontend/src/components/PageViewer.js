@@ -58,6 +58,9 @@ const PageContent = styled.div`
     display: block;
     width: 100%;
     height: 100%;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
   }
 
   .fixed-layout-page .text-overlay {
@@ -66,6 +69,20 @@ const PageContent = styled.div`
     top: 0;
     width: 100%;
     height: 100%;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .fixed-layout-page .overlay-word {
+    cursor: text;
+    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  .fixed-layout-page .overlay-separator {
+    pointer-events: none;
   }
 
   ::selection {

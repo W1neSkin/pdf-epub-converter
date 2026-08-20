@@ -74,14 +74,16 @@ class AlternativePDFParser:
             # PDFs commonly omit whitespace glyphs. Add only separators that
             # pdfplumber inferred between its words, never between characters.
             x0 = float(word.get("x1", 0) or 0)
-            next_x0 = float(next_word.get("x0", x0) or x0)
             boxes.append(
                 {
                     "text": " " if same_line else "\n",
                     "x0": x0,
-                    "x1": max(x0 + 0.5, next_x0) if same_line else x0 + 0.5,
+                    # Keep separators tiny. A box spanning the gap between table
+                    # cells becomes a large invisible selection target.
+                    "x1": x0 + 0.5,
                     "top": top,
                     "bottom": bottom,
+                    "is_separator": True,
                 }
             )
 
