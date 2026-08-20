@@ -41,7 +41,7 @@ test('opens Convert after signing in from the landing page', async () => {
   });
   fireEvent.click(within(dialog).getByRole('button', { name: /^Sign in$/i }));
 
-  expect(await screen.findByText(/Convert or export PDF/i)).toBeInTheDocument();
+  expect(await screen.findByText(/^Convert PDF$/i)).toBeInTheDocument();
 });
 
 test('shows persistent navigation for authenticated user', async () => {

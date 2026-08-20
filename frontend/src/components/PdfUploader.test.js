@@ -58,6 +58,9 @@ describe('PdfUploader', () => {
     const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
 
     fireEvent.change(input, { target: { files: [file] } });
+    expect(await screen.findByText(/File information/i)).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Convert to EPUB/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/EPUB generated successfully/i)).toBeInTheDocument();
@@ -101,6 +104,8 @@ describe('PdfUploader', () => {
     const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
 
     fireEvent.change(input, { target: { files: [file] } });
+    expect(await screen.findByText(/File information/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Convert to EPUB/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Uploading PDF/i)).toBeInTheDocument();
@@ -109,7 +114,7 @@ describe('PdfUploader', () => {
     fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Choose PDF/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Convert to EPUB/i })).toBeInTheDocument();
     });
 
     const convertCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('/api/convert'));
@@ -156,12 +161,14 @@ describe('PdfUploader', () => {
     });
 
     const { container } = render(<PdfUploader user={user} onEpubGenerated={jest.fn()} onBack={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /Excel \+ tables/i }));
     expect(screen.getAllByRole('button', { name: /^Choose PDF$/i })).toHaveLength(1);
 
     const input = container.querySelector('input[type="file"]');
     const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
     fireEvent.change(input, { target: { files: [file] } });
+    expect(await screen.findByText(/File information/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Excel \+ tables/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Excel files/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Excel document generated successfully/i)).toBeInTheDocument();
@@ -207,6 +214,8 @@ describe('PdfUploader', () => {
     const input = container.querySelector('input[type="file"]');
     const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
     fireEvent.change(input, { target: { files: [file] } });
+    expect(await screen.findByText(/File information/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Convert to EPUB/i }));
 
     await waitFor(() => {
       expect(onSessionExpired).toHaveBeenCalledTimes(1);

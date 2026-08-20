@@ -64,8 +64,8 @@ const PageItem = styled.button`
   cursor: pointer;
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
-  background: ${props => props.$isActive ? 'rgba(255, 215, 0, 0.2)' : 'transparent'};
-  border-left-color: ${props => props.$isActive ? '#ffd700' : 'transparent'};
+  background: ${props => props.$isActive ? 'rgba(247, 201, 72, 0.12)' : 'transparent'};
+  border-left-color: ${props => props.$isActive ? '#f7c948' : 'transparent'};
 
   &:hover {
     background: rgba(255, 255, 255, 0.1);

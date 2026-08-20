@@ -17,7 +17,9 @@ const GlobalStyle = createGlobalStyle`
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: radial-gradient(circle at top, #1f2a56 0%, #111827 55%, #0b1120 100%);
+    background:
+      radial-gradient(circle at 50% -15%, rgba(49, 67, 116, 0.45), transparent 38rem),
+      #0a1020;
     color: #ffffff;
     min-height: 100vh;
   }
@@ -45,24 +47,28 @@ const Header = styled.header`
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(15, 23, 42, 0.88);
+  background: rgba(10, 16, 32, 0.92);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 0.9rem 1rem;
+  padding: 0.75rem 1rem;
 
-  @media (max-width: 640px) {
-    padding: 0.7rem 0.75rem;
+  @media (max-width: 720px) {
+    padding: 0.5rem 0.65rem;
   }
 `;
 
 const HeaderRow = styled.div`
-  max-width: 1200px;
+  max-width: 1180px;
   margin: 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
-  flex-wrap: wrap;
+
+  @media (max-width: 720px) {
+    grid-template-columns: auto 1fr auto;
+    gap: 0.4rem;
+  }
 `;
 
 const BrandButton = styled.button`
@@ -73,11 +79,21 @@ const BrandButton = styled.button`
   border: none;
   color: #ffffff;
   cursor: pointer;
-  font-size: 1.15rem;
-  font-weight: 600;
+  font-size: 1.05rem;
+  font-weight: 750;
 
   i {
     color: #facc15;
+  }
+
+  @media (max-width: 720px) {
+    width: 2.6rem;
+    height: 2.6rem;
+    justify-content: center;
+
+    span {
+      display: none;
+    }
   }
 `;
 
@@ -86,11 +102,12 @@ const UserPanel = styled.div`
   align-items: center;
   gap: 0.6rem;
   flex-wrap: wrap;
+  justify-self: end;
 `;
 
 const UserChip = styled.div`
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #121a2d;
+  border: 1px solid #27324a;
   border-radius: 999px;
   padding: 0.4rem 0.8rem;
   color: rgba(255, 255, 255, 0.9);
@@ -99,6 +116,10 @@ const UserChip = styled.div`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
+  @media (max-width: 720px) {
+    display: none;
+  }
 `;
 
 const TopButton = styled.button`
@@ -109,41 +130,71 @@ const TopButton = styled.button`
   color: ${(props) => (props.$accent ? '#111827' : '#ffffff')};
   cursor: pointer;
   font-weight: 600;
+  justify-self: end;
+
+  @media (min-width: 721px) {
+    grid-column: 3;
+  }
+
+  @media (max-width: 720px) {
+    width: 2.6rem;
+    height: 2.6rem;
+    padding: 0;
+
+    span {
+      display: none;
+    }
+  }
 `;
 
 const NavBar = styled.nav`
-  max-width: 1200px;
-  margin: 0.65rem auto 0;
+  margin: 0;
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.25rem;
+  border: 1px solid #27324a;
+  border-radius: 0.85rem;
+  background: #0d1526;
 
-  @media (max-width: 640px) {
+  @media (max-width: 720px) {
+    grid-column: auto;
+    grid-row: auto;
     display: grid;
     grid-template-columns: 1fr 1fr;
+    padding: 0.15rem;
   }
 `;
 
 const NavButton = styled.button`
-  border: 1px solid ${(props) => (props.$active ? 'rgba(250, 204, 21, 0.9)' : 'rgba(255, 255, 255, 0.2)')};
-  border-radius: 0.55rem;
-  padding: 0.7rem 0.95rem;
-  background: ${(props) => (props.$active ? 'rgba(250, 204, 21, 0.2)' : 'rgba(255, 255, 255, 0.05)')};
-  color: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 0.62rem;
+  padding: 0.58rem 0.9rem;
+  background: ${(props) => (props.$active ? '#202a40' : 'transparent')};
+  color: ${(props) => (props.$active ? '#ffffff' : 'rgba(255, 255, 255, 0.68)')};
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
   justify-content: center;
+  box-shadow: ${(props) => (props.$active ? 'inset 0 -2px #f7c948' : 'none')};
+
+  &:hover {
+    color: #ffffff;
+    background: #182238;
+  }
+
+  @media (max-width: 720px) {
+    padding: 0.5rem 0.6rem;
+  }
 `;
 
 const Main = styled.main`
   flex: 1;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 1.25rem 1rem 2rem;
+  padding: clamp(1.25rem, 3vw, 2.25rem) 1rem 3rem;
 `;
 
 const LoadingState = styled.div`
@@ -323,44 +374,49 @@ function App() {
               <span>PDF Converter</span>
             </BrandButton>
 
+            {user && (
+              <NavBar aria-label="Main navigation">
+                <NavButton
+                  type="button"
+                  aria-label="Library"
+                  $active={currentView === VIEW_DASHBOARD}
+                  onClick={goDashboard}
+                >
+                  <i className="fas fa-book" aria-hidden="true"></i>
+                  <span>Library</span>
+                </NavButton>
+                <NavButton
+                  type="button"
+                  aria-label="Convert"
+                  $active={currentView === VIEW_CONVERT}
+                  onClick={() => setCurrentView(VIEW_CONVERT)}
+                >
+                  <i className="fas fa-file-pdf" aria-hidden="true"></i>
+                  <span>Convert</span>
+                </NavButton>
+              </NavBar>
+            )}
+
             {user ? (
               <UserPanel>
                 <UserChip title={user.email}>{user.email}</UserChip>
-                <TopButton type="button" onClick={handleLogout}>
-                  Logout
+                <TopButton type="button" aria-label="Logout" onClick={handleLogout}>
+                  <i className="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+                  <span>Logout</span>
                 </TopButton>
               </UserPanel>
             ) : (
               <TopButton
                 type="button"
+                aria-label="Sign in"
                 $accent
                 onClick={() => setLandingAuthRequest((value) => value + 1)}
               >
-                Sign in
+                <i className="fas fa-user" aria-hidden="true"></i>
+                <span>Sign in</span>
               </TopButton>
             )}
           </HeaderRow>
-
-          {user && (
-            <NavBar aria-label="Main navigation">
-              <NavButton
-                type="button"
-                $active={currentView === VIEW_DASHBOARD}
-                onClick={goDashboard}
-              >
-                <i className="fas fa-book" aria-hidden="true"></i>
-                Library
-              </NavButton>
-              <NavButton
-                type="button"
-                $active={currentView === VIEW_CONVERT}
-                onClick={() => setCurrentView(VIEW_CONVERT)}
-              >
-                <i className="fas fa-file-pdf" aria-hidden="true"></i>
-                Convert
-              </NavButton>
-            </NavBar>
-          )}
         </Header>
 
         <Main>

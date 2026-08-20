@@ -4,13 +4,13 @@ import styled from 'styled-components';
 // Plain FAQ text for Google and AI search. Keep answers short and true.
 
 const Section = styled.section`
-  margin: 4rem 0 2rem;
+  margin: 2.5rem 0 1.5rem;
   color: white;
 `;
 
 const Title = styled.h2`
-  font-size: 2rem;
-  font-weight: 300;
+  font-size: 1.4rem;
+  font-weight: 700;
   text-align: center;
   margin-bottom: 2rem;
 `;
@@ -24,8 +24,8 @@ const List = styled.div`
 `;
 
 const Item = styled.article`
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #121a2d;
+  border: 1px solid #27324a;
   border-radius: 0.75rem;
   padding: 1.25rem 1.5rem;
 `;

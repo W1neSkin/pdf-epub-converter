@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { CONVERTER_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES } from '../config';
 import { getPdfInfo } from '../pdfInfo';
 import ConversionModePicker from './ConversionModePicker';
+import PdfPreview from './PdfPreview';
 import {
   ButtonRow,
   DropArea as DropZone,
@@ -13,12 +14,95 @@ import {
 
 const Wrapper = styled.section`
   width: 100%;
-  max-width: 760px;
+  max-width: 1100px;
   margin: 0 auto;
 `;
 
 const HeaderRow = styled.div`
+  margin-bottom: 1.2rem;
+`;
+
+const Steps = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   margin-bottom: 1rem;
+  border: 1px solid #27324a;
+  border-radius: 0.85rem;
+  background: #0d1526;
+  overflow: hidden;
+`;
+
+const Step = styled.div`
+  padding: 0.72rem 0.85rem;
+  border-right: 1px solid #27324a;
+  color: ${(props) => (props.$active ? '#ffffff' : 'rgba(255,255,255,0.48)')};
+  font-size: 0.82rem;
+  font-weight: 700;
+
+  &:last-child {
+    border-right: 0;
+  }
+
+  span {
+    display: inline-grid;
+    place-items: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    margin-right: 0.45rem;
+    border-radius: 50%;
+    background: ${(props) => (props.$active ? '#f7c948' : '#263149')};
+    color: ${(props) => (props.$active ? '#111827' : 'rgba(255,255,255,0.65)')};
+  }
+`;
+
+const ReviewLayout = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(285px, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+
+  @media (max-width: 860px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const SettingsPanel = styled(Card)`
+  position: sticky;
+  top: 6rem;
+
+  @media (max-width: 860px) {
+    position: static;
+  }
+`;
+
+const SectionLabel = styled.div`
+  margin: 1.15rem 0 0.65rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+`;
+
+const FileSummary = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border-radius: 0.75rem;
+  background: #0d1526;
+
+  div {
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 0.75rem;
+  }
+
+  strong {
+    display: block;
+    margin-top: 0.2rem;
+    color: #ffffff;
+    font-size: 0.88rem;
+  }
 `;
 
 const Icon = styled.i`
@@ -55,6 +139,14 @@ const HiddenInput = styled.input`
 const Actions = styled(ButtonRow)`
   justify-content: center;
   margin-top: 1rem;
+`;
+
+const SettingsActions = styled(ButtonRow)`
+  margin-top: 1rem;
+
+  button {
+    flex: 1;
+  }
 `;
 
 const DownloadGrid = styled.div`
@@ -113,6 +205,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
   const [archiveDownloadUrl, setArchiveDownloadUrl] = useState('');
   const [progress, setProgress] = useState(0);
   const [limitError, setLimitError] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
   const [fileInfo, setFileInfo] = useState(null);
   const [selectedAction, setSelectedAction] = useState('epub');
   const [jobType, setJobType] = useState('epub');
@@ -130,7 +223,6 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
   const lastUpload = useRef({ key: '', at: 0 });
   const cancelledRef = useRef(false);
   const abortRef = useRef(null);
-  const actionRef = useRef('epub');
   const AUTH_EXPIRED = 'AUTH_EXPIRED';
 
   const waitWithAbort = useCallback((ms, signal) => {
@@ -176,17 +268,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     }
   }, []);
 
-  const uploadFile = useCallback(async (file, action = 'epub') => {
+  const prepareFile = useCallback(async (file) => {
     if (!file) return;
-
-    const uploadKey = `${file.name}:${file.size}:${file.lastModified}`;
-    const now = Date.now();
-    if (lastUpload.current.key === uploadKey && now - lastUpload.current.at < 1500) {
-      return;
-    }
-    lastUpload.current = { key: uploadKey, at: now };
-
     setLimitError('');
+    setSelectedFile(null);
     setFileInfo(null);
 
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -201,19 +286,31 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
       return;
     }
 
-    let info;
     try {
-      info = await getPdfInfo(file);
+      const info = await getPdfInfo(file);
+      if (info.pages > MAX_PDF_PAGES) {
+        setLimitError(`This PDF has ${info.pages} pages. Maximum is ${MAX_PDF_PAGES}.`);
+        return;
+      }
+      setFileInfo(info);
+      setSelectedFile(file);
+      setSelectedAction('epub');
     } catch (error) {
       setLimitError('Could not read this PDF. Try another file.');
-      return;
     }
+  }, []);
 
-    setFileInfo(info);
-    if (info.pages > MAX_PDF_PAGES) {
-      setLimitError(`This PDF has ${info.pages} pages. Maximum is ${MAX_PDF_PAGES}.`);
+  const uploadFile = useCallback(async (file, action = 'epub') => {
+    if (!file) return;
+
+    const uploadKey = `${file.name}:${file.size}:${file.lastModified}`;
+    const now = Date.now();
+    if (lastUpload.current.key === uploadKey && now - lastUpload.current.at < 1500) {
       return;
     }
+    lastUpload.current = { key: uploadKey, at: now };
+
+    setLimitError('');
     if (!user?.token) {
       setLimitError('Please log in first.');
       return;
@@ -469,21 +566,19 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     setIsDragOver(false);
     const file = event.dataTransfer?.files?.[0];
     if (file) {
-      uploadFile(file, actionRef.current);
+      prepareFile(file);
     }
-  }, [uploadFile]);
+  }, [prepareFile]);
 
   const handleFileInput = useCallback((event) => {
     const file = event.target.files?.[0];
     if (file) {
-      uploadFile(file, actionRef.current);
+      prepareFile(file);
       event.target.value = '';
     }
-  }, [uploadFile]);
+  }, [prepareFile]);
 
-  const openFilePicker = useCallback((action) => {
-    actionRef.current = action;
-    setSelectedAction(action);
+  const openFilePicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
@@ -530,27 +625,32 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     setArchiveDownloadName('separate_tables.zip');
     setJobType('epub');
     setCsvStats({ documentRowCount: 0, tableCount: 0, rowCount: 0 });
+    setSelectedFile(null);
+    setFileInfo(null);
+    setSelectedAction('epub');
   };
 
   return (
     <Wrapper>
       <HeaderRow>
-        <h2 style={{ fontSize: '1.45rem', marginBottom: '0.35rem' }}>
-          Convert or export PDF
-        </h2>
-        <SubText>First choose the result. Then upload one PDF file.</SubText>
+        <h2 style={{ fontSize: '1.4rem', marginBottom: '0.35rem' }}>Convert PDF</h2>
+        <SubText>Upload the file, review it, then choose the output.</SubText>
       </HeaderRow>
 
-      {!isConverting && !downloadUrl && (
+      <Steps aria-label="Conversion steps">
+        <Step $active={!selectedFile && !isConverting && !downloadUrl}>
+          <span>1</span>Upload
+        </Step>
+        <Step $active={Boolean(selectedFile && !isConverting && !downloadUrl)}>
+          <span>2</span>Review
+        </Step>
+        <Step $active={Boolean(isConverting || downloadUrl)}>
+          <span>3</span>Convert
+        </Step>
+      </Steps>
+
+      {!isConverting && !downloadUrl && !selectedFile && (
         <Card>
-          <ConversionModePicker
-            value={selectedAction}
-            onChange={(action) => {
-              setSelectedAction(action);
-              actionRef.current = action;
-              setLimitError('');
-            }}
-          />
           <DropZone
             $active={isDragOver}
             onDragEnter={handleDragEnter}
@@ -561,37 +661,74 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             <Icon className="fas fa-file-pdf" aria-hidden="true"></Icon>
             <MainText>Drop a PDF here</MainText>
             <SubText>
-              {selectedAction === 'csv'
-                ? 'Creates a readable XLSX workbook and table-only CSV downloads.'
-                : 'Creates a fixed-layout EPUB and saves it to your library.'}
-              {' '}Up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
+              Review the document before conversion. Up to {MAX_PDF_MB} MB and{' '}
+              {MAX_PDF_PAGES} pages.
             </SubText>
 
-            {fileInfo && (
-              <Info>
-                {fileInfo.name}: {fileInfo.pages} pages, {fileInfo.sizeMb.toFixed(1)} MB
-                {fileInfo.title ? ` — ${fileInfo.title}` : ''}
-              </Info>
-            )}
             {limitError && <ErrorText>{limitError}</ErrorText>}
 
             <Actions>
-              <PrimaryButton
-                type="button"
-                onClick={() => openFilePicker(selectedAction)}
-              >
+              <PrimaryButton type="button" onClick={openFilePicker}>
                 Choose PDF
               </PrimaryButton>
             </Actions>
-            <HiddenInput
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={handleFileInput}
-            />
           </DropZone>
         </Card>
       )}
+
+      {!isConverting && !downloadUrl && selectedFile && fileInfo && (
+        <ReviewLayout>
+          <PdfPreview file={selectedFile} />
+          <SettingsPanel>
+            <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>
+              File information
+            </h3>
+            <FileSummary>
+              <div>
+                Pages
+                <strong>{fileInfo.pages}</strong>
+              </div>
+              <div>
+                Size
+                <strong>{fileInfo.sizeMb.toFixed(1)} MB</strong>
+              </div>
+            </FileSummary>
+            <SectionLabel>Output format</SectionLabel>
+            <ConversionModePicker
+              value={selectedAction}
+              stacked
+              onChange={(action) => {
+                setSelectedAction(action);
+                setLimitError('');
+              }}
+            />
+            <SubText>
+              {selectedAction === 'csv'
+                ? 'Creates XLSX, one combined CSV, and separate table files.'
+                : 'Preserves each PDF page and adds selectable text.'}
+            </SubText>
+            {limitError && <ErrorText>{limitError}</ErrorText>}
+            <SettingsActions>
+              <PrimaryButton
+                type="button"
+                onClick={() => uploadFile(selectedFile, selectedAction)}
+              >
+                {selectedAction === 'csv' ? 'Create Excel files' : 'Convert to EPUB'}
+              </PrimaryButton>
+              <GhostButton type="button" onClick={openFilePicker}>
+                Change PDF
+              </GhostButton>
+            </SettingsActions>
+          </SettingsPanel>
+        </ReviewLayout>
+      )}
+
+      <HiddenInput
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        onChange={handleFileInput}
+      />
 
       {isConverting && (
         <Card>

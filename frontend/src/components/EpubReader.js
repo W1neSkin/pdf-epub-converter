@@ -10,10 +10,9 @@ const ReaderContainer = styled.div`
   width: 100%;
   max-width: 1400px;
   min-height: 78vh;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px);
+  background: #121a2d;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid #27324a;
   overflow: hidden;
   position: relative;
 
@@ -26,8 +25,8 @@ const ReaderContainer = styled.div`
 const Sidebar = styled.aside`
   width: ${(props) => (props.$isOpen ? '300px' : '0')};
   transition: width 0.25s ease;
-  background: rgba(17, 24, 39, 0.96);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0d1526;
+  border-right: 1px solid #27324a;
   overflow: hidden;
 
   @media (max-width: 900px) {

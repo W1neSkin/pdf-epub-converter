@@ -6,8 +6,8 @@ const ControlsContainer = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0d1526;
+  border-bottom: 1px solid #27324a;
   color: white;
 
   @media (max-width: 720px) {
@@ -82,7 +82,7 @@ const ProgressBar = styled.div`
 const ProgressFill = styled.div`
   width: ${props => props.$progress}%;
   height: 100%;
-  background: #ffd700;
+  background: #f7c948;
   transition: width 0.3s ease;
 `;
 
@@ -93,8 +93,8 @@ const RightControls = styled.div`
 `;
 
 const ControlButton = styled.button`
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #1a2439;
+  border: 1px solid #34415c;
   color: white;
   padding: 0.5rem;
   border-radius: 0.3rem;
@@ -107,8 +107,8 @@ const ControlButton = styled.button`
   height: 44px;
 
   &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.3);
+    background: #222e46;
+    border-color: #4a5a79;
   }
 
   &:disabled {
@@ -127,8 +127,8 @@ const ControlButton = styled.button`
 `;
 
 const TocButton = styled(ControlButton)`
-  background: ${props => props.$isActive ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)'};
-  border-color: ${props => props.$isActive ? '#ffd700' : 'rgba(255, 255, 255, 0.2)'};
+  background: ${props => props.$isActive ? 'rgba(247, 201, 72, 0.14)' : '#1a2439'};
+  border-color: ${props => props.$isActive ? '#f7c948' : '#34415c'};
 `;
 
 const BackButton = styled(ControlButton)`

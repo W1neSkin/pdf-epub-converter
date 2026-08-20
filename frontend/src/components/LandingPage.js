@@ -14,15 +14,16 @@ const LandingContent = styled.div`
 `;
 
 const Hero = styled.div`
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid #27324a;
   border-radius: 1rem;
-  background: rgba(15, 23, 42, 0.72);
+  background: #121a2d;
   padding: clamp(1.1rem, 2.4vw, 2rem);
 `;
 
 const HeroTitle = styled.h1`
-  font-size: clamp(1.7rem, 4vw, 2.7rem);
-  line-height: 1.15;
+  max-width: 760px;
+  font-size: clamp(1.55rem, 3vw, 2.05rem);
+  line-height: 1.2;
 `;
 
 const HeroText = styled.p`
@@ -37,7 +38,7 @@ const CTA = styled.button`
   border: none;
   border-radius: 0.7rem;
   padding: 0.75rem 1.1rem;
-  background: #facc15;
+  background: #f7c948;
   color: #111827;
   font-weight: 700;
   cursor: pointer;
@@ -50,9 +51,9 @@ const Grid = styled.div`
 `;
 
 const Card = styled.article`
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid #27324a;
   border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.07);
+  background: #121a2d;
   padding: 0.95rem;
 `;
 
@@ -170,7 +171,7 @@ const LandingPage = ({ authRequest = 0, onAuthSuccess }) => {
         aria-hidden={showAuthModal ? 'true' : undefined}
       >
         <Hero>
-          <HeroTitle>PDF to EPUB or Excel — without the guesswork</HeroTitle>
+          <HeroTitle>PDF to EPUB or Excel - without the guesswork</HeroTitle>
           <HeroText>
             Choose a book for reading or a spreadsheet for working with document
             data. The free plan supports PDF files up to 50MB and 50 pages.

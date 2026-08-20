@@ -11,19 +11,21 @@ import {
 
 const DashboardContainer = styled.div`
   width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
 `;
 
 const HeaderBlock = styled.div`
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
 `;
 
 const Title = styled.h2`
-  font-size: 1.55rem;
+  font-size: 1.45rem;
   margin-bottom: 0.4rem;
 `;
 
@@ -34,19 +36,50 @@ const Subtitle = styled.p`
 
 const StatsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.85rem;
-  margin: 1rem 0 1.5rem;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+
+  @media (max-width: 620px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 const StatCard = styled(Panel)`
-  padding: 1rem;
+  border-radius: 0;
+  border-right-width: 0;
+  box-shadow: none;
+  padding: 1.1rem 1.25rem;
+
+  &:first-child {
+    border-radius: 1rem 0 0 1rem;
+  }
+
+  &:last-child {
+    border-right-width: 1px;
+    border-radius: 0 1rem 1rem 0;
+  }
+
+  @media (max-width: 620px) {
+    border-right-width: 1px;
+    border-bottom-width: 0;
+    border-radius: 0;
+
+    &:first-child {
+      border-radius: 1rem 1rem 0 0;
+    }
+
+    &:last-child {
+      border-bottom-width: 1px;
+      border-radius: 0 0 1rem 1rem;
+    }
+  }
 `;
 
 const StatValue = styled.div`
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  color: #facc15;
+  color: #f7c948;
 `;
 
 const StatLabel = styled.div`
@@ -55,45 +88,153 @@ const StatLabel = styled.div`
   font-size: 0.88rem;
 `;
 
+const LibraryPanel = styled(Panel)`
+  padding: 0;
+  overflow: hidden;
+`;
+
+const LibraryToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid #27324a;
+
+  @media (max-width: 700px) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+`;
+
+const ToolbarControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+
+  @media (max-width: 700px) {
+    width: 100%;
+  }
+`;
+
 const SearchInput = styled.input`
-  width: 100%;
-  max-width: 460px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 0.6rem;
-  background: rgba(255, 255, 255, 0.08);
+  width: min(340px, 42vw);
+  border: 1px solid #34415c;
+  border-radius: 0.7rem;
+  background: #0d1526;
   color: white;
-  padding: 0.7rem 0.9rem;
-  margin-bottom: 1rem;
+  padding: 0.7rem 0.85rem;
+
+  @media (max-width: 700px) {
+    width: 100%;
+  }
+`;
+
+const ViewSwitch = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0.2rem;
+  border: 1px solid #34415c;
+  border-radius: 0.7rem;
+  background: #0d1526;
+`;
+
+const ViewButton = styled.button`
+  width: 2.35rem;
+  height: 2.35rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: ${(props) => (props.$active ? '#27324a' : 'transparent')};
+  color: ${(props) => (props.$active ? '#f7c948' : 'rgba(255,255,255,0.55)')};
+  cursor: pointer;
 `;
 
 const BooksGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: ${(props) => (
+    props.$view === 'grid'
+      ? 'repeat(auto-fill, minmax(270px, 1fr))'
+      : '1fr'
+  )};
+  gap: 0.75rem;
+  padding: 1rem;
 `;
 
 const BookCard = styled(Panel).attrs({ as: 'article' })`
-  padding: 0.95rem;
+  display: grid;
+  grid-template-columns: ${(props) => (
+    props.$view === 'grid' ? '1fr' : '3.25rem minmax(0, 1fr) auto'
+  )};
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  box-shadow: none;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 2.8rem minmax(0, 1fr);
+  }
+`;
+
+const BookIcon = styled.div`
+  width: 3.25rem;
+  height: 3.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.8rem;
+  background: rgba(247, 201, 72, 0.12);
+  color: #f7c948;
+  font-size: 1.15rem;
+
+  @media (max-width: 720px) {
+    width: 2.8rem;
+    height: 2.8rem;
+  }
+`;
+
+const BookContent = styled.div`
+  min-width: 0;
 `;
 
 const BookName = styled.h3`
   font-size: 1.05rem;
-  margin-bottom: 0.6rem;
-  word-break: break-word;
+  margin-bottom: 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const BookMeta = styled.div`
   color: rgba(255, 255, 255, 0.78);
   font-size: 0.85rem;
-  line-height: 1.45;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.8rem;
 `;
 
 const Actions = styled(ButtonRow)`
-  margin-top: 0.85rem;
+  justify-content: flex-end;
 
   button {
     min-height: 2.4rem;
     padding: 0.4rem 0.75rem;
+  }
+
+  @media (max-width: 720px) {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+
+    button {
+      flex: 1;
+    }
+  }
+`;
+
+const DeleteButton = styled(DangerAction)`
+  width: 2.4rem;
+  padding: 0;
+
+  @media (max-width: 720px) {
+    flex: 0 0 2.4rem !important;
   }
 `;
 
@@ -116,19 +257,26 @@ const UserDashboard = ({
   const [stats, setStats] = useState(null);
   const [books, setBooks] = useState([]);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState('list');
   const [error, setError] = useState('');
 
   const token = user?.token || localStorage.getItem('authToken') || '';
 
   const loadDashboard = useCallback(async () => {
-    if (!token) return;
+    if (!token) {
+      setLoading(false);
+      setError('Your session is unavailable. Please sign in again.');
+      return;
+    }
     setLoading(true);
     setError('');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const [statsResp, booksResp] = await Promise.all([
-        fetch(`${API_BASE_URL}/library/stats`, { headers }),
-        fetch(`${API_BASE_URL}/library/books?limit=50`, { headers }),
+        fetch(`${API_BASE_URL}/library/stats`, { headers, signal: controller.signal }),
+        fetch(`${API_BASE_URL}/library/books?limit=50`, { headers, signal: controller.signal }),
       ]);
 
       if (statsResp.ok) {
@@ -143,8 +291,13 @@ const UserDashboard = ({
       }
     } catch (loadError) {
       console.error(loadError);
-      setError('Failed to load dashboard data.');
+      setError(
+        loadError.name === 'AbortError'
+          ? 'The library took too long to respond. Please retry.'
+          : 'Failed to load dashboard data.'
+      );
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   }, [token]);
@@ -255,60 +408,111 @@ const UserDashboard = ({
         </StatsGrid>
       )}
 
-      {books.length > 0 && (
-        <SearchInput
-          type="text"
-          placeholder="Search books..."
-          aria-label="Search books"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      )}
-
-      {filteredBooks.length === 0 ? (
+      {!error && (books.length === 0 ? (
         <StateBox>
-          <div>{books.length ? 'No books match this search.' : 'No EPUB books yet.'}</div>
-          {!books.length && (
-            <Actions style={{ justifyContent: 'center' }}>
-              <PrimaryAction type="button" onClick={onNavigateToConvert}>
-                Convert your first PDF
-              </PrimaryAction>
-              <SecondaryAction type="button" onClick={onOpenLocalEpub}>
-                Open an EPUB file
-              </SecondaryAction>
-            </Actions>
-          )}
+          <div>No EPUB books yet.</div>
+          <Actions style={{ justifyContent: 'center' }}>
+            <PrimaryAction type="button" onClick={onNavigateToConvert}>
+              Convert your first PDF
+            </PrimaryAction>
+            <SecondaryAction type="button" onClick={onOpenLocalEpub}>
+              Open an EPUB file
+            </SecondaryAction>
+          </Actions>
         </StateBox>
       ) : (
-        <BooksGrid>
-          {filteredBooks.map((book) => (
-            <BookCard key={book.id}>
-              <BookName>{book.title || book.original_filename || 'Untitled book'}</BookName>
-              <BookMeta>
-                {book.original_filename && book.original_filename !== book.title && (
-                  <div>File: {book.original_filename}</div>
-                )}
-                <div>Size: {formatFileSize(book.file_size)}</div>
-                <div>Pages: {book.pages || 0}</div>
-              </BookMeta>
+        <LibraryPanel>
+          <LibraryToolbar>
+            <div>
+              <strong>Books</strong>
+              <div style={{ color: 'rgba(255,255,255,0.58)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                {filteredBooks.length} of {books.length}
+              </div>
+            </div>
+            <ToolbarControls>
+              <SearchInput
+                type="text"
+                placeholder="Search title or file..."
+                aria-label="Search books"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <ViewSwitch aria-label="Library view">
+                <ViewButton
+                  type="button"
+                  $active={viewMode === 'list'}
+                  aria-label="List view"
+                  aria-pressed={viewMode === 'list'}
+                  onClick={() => setViewMode('list')}
+                >
+                  <i className="fas fa-list" aria-hidden="true"></i>
+                </ViewButton>
+                <ViewButton
+                  type="button"
+                  $active={viewMode === 'grid'}
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === 'grid'}
+                  onClick={() => setViewMode('grid')}
+                >
+                  <i className="fas fa-grip" aria-hidden="true"></i>
+                </ViewButton>
+              </ViewSwitch>
+            </ToolbarControls>
+          </LibraryToolbar>
+          {filteredBooks.length === 0 ? (
+            <StateBox style={{ margin: '1rem' }}>No books match this search.</StateBox>
+          ) : (
+            <BooksGrid $view={viewMode}>
+              {filteredBooks.map((book) => (
+                <BookCard key={book.id} $view={viewMode}>
+                  <BookIcon>
+                    <i className="fas fa-book-open" aria-hidden="true"></i>
+                  </BookIcon>
+                  <BookContent>
+                    <BookName title={book.title || book.original_filename}>
+                      {book.title || book.original_filename || 'Untitled book'}
+                    </BookName>
+                    <BookMeta>
+                      <span>{book.pages || 0} pages</span>
+                      <span>{formatFileSize(book.file_size)}</span>
+                      {book.original_filename && book.original_filename !== book.title && (
+                        <span title={book.original_filename}>{book.original_filename}</span>
+                      )}
+                    </BookMeta>
+                  </BookContent>
+                  <Actions>
+                    <PrimaryAction type="button" onClick={() => onOpenBook && onOpenBook(book)}>
+                      Read
+                    </PrimaryAction>
+                    <SecondaryAction type="button" onClick={() => downloadBook(book)}>
+                      Download
+                    </SecondaryAction>
+                    <DeleteButton
+                      type="button"
+                      aria-label={`Delete ${book.title || 'book'}`}
+                      title="Delete book"
+                      onClick={() => deleteBook(book.id)}
+                    >
+                      <i className="fas fa-trash" aria-hidden="true"></i>
+                    </DeleteButton>
+                  </Actions>
+                </BookCard>
+              ))}
+            </BooksGrid>
+          )}
+        </LibraryPanel>
+      ))}
 
-              <Actions>
-                <PrimaryAction type="button" onClick={() => onOpenBook && onOpenBook(book)}>
-                  Read
-                </PrimaryAction>
-                <SecondaryAction type="button" onClick={() => downloadBook(book)}>
-                  Download
-                </SecondaryAction>
-                <DangerAction type="button" onClick={() => deleteBook(book.id)}>
-                  Delete
-                </DangerAction>
-              </Actions>
-            </BookCard>
-          ))}
-        </BooksGrid>
+      {error && (
+        <StateBox $error>
+          <div>{error}</div>
+          <Actions style={{ justifyContent: 'center', marginTop: '0.75rem' }}>
+            <SecondaryAction type="button" onClick={loadDashboard}>
+              Retry
+            </SecondaryAction>
+          </Actions>
+        </StateBox>
       )}
-
-      {error && <StateBox $error>{error}</StateBox>}
     </DashboardContainer>
   );
 };

@@ -59,3 +59,11 @@ def test_homepage_structured_data_and_llms_file_are_current():
     llms_text = (PUBLIC / "llms.txt").read_text(encoding="utf-8")
     assert llms_text.startswith("# PDF to EPUB Converter\n\n>")
     assert f"[Features]({SITE}features.html)" in llms_text
+
+
+def test_user_facing_text_uses_regular_hyphens():
+    """Keep interface punctuation consistent with the project's writing style."""
+    source_files = list((ROOT / "frontend" / "src").rglob("*.js"))
+    public_files = list(PUBLIC.glob("*.html"))
+    for path in source_files + public_files:
+        assert "\N{EM DASH}" not in path.read_text(encoding="utf-8"), path

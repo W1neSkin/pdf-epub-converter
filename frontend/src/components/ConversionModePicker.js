@@ -4,7 +4,9 @@ import styled from 'styled-components';
 
 const Grid = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: ${(props) => (
+    props.$stacked ? '1fr' : 'repeat(2, minmax(0, 1fr))'
+  )};
   gap: 0.75rem;
   margin-bottom: 1rem;
 
@@ -14,7 +16,7 @@ const Grid = styled.div`
 `;
 
 const Option = styled.button`
-  min-height: 8rem;
+  min-height: 6.4rem;
   border: 1px solid ${(props) => (
     props.$active ? '#facc15' : 'rgba(255, 255, 255, 0.18)'
   )};
@@ -43,7 +45,7 @@ const OptionHeader = styled.span`
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   font-weight: 750;
 
   i {
@@ -76,8 +78,8 @@ const modes = [
   },
 ];
 
-const ConversionModePicker = ({ value, onChange }) => (
-  <Grid aria-label="Output format">
+const ConversionModePicker = ({ value, onChange, stacked = false }) => (
+  <Grid aria-label="Output format" $stacked={stacked}>
     {modes.map((mode) => (
       <Option
         key={mode.id}
