@@ -6,15 +6,12 @@
     <link rel="icon" type="image/png" href="%PUBLIC_URL%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#667eea" />
-    <meta name="robots" content="index, follow" />
-    <title>Free PDF to EPUB Converter — Online, in the Browser</title>
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <title>Free PDF to EPUB Converter & PDF Table Export</title>
     <meta
       name="description"
-      content="Free online PDF to EPUB converter. Upload a PDF (up to 50MB, 50 pages), get an EPUB with selectable text, and keep books in a personal library. Works in the browser."
-    />
-    <meta
-      name="keywords"
-      content="PDF to EPUB, convert PDF to EPUB, free EPUB converter, online PDF converter, Kindle EPUB"
+      content="Convert PDF to fixed-layout EPUB with selectable text. Export PDF content to XLSX or extract tables to CSV. Free online tool for files up to 50MB and 50 pages."
     />
     <link rel="canonical" href="https://w1neskin.github.io/pdf-epub-converter/" />
 
@@ -22,20 +19,24 @@
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="PDF to EPUB Converter" />
-    <meta property="og:title" content="Free PDF to EPUB Converter" />
+    <meta property="og:title" content="Free PDF to EPUB Converter & Table Export" />
     <meta
       property="og:description"
-      content="Upload a PDF and download an EPUB you can read on Kindle, Apple Books, or in the browser."
+      content="Convert PDF to EPUB with selectable text, export a readable XLSX workbook, or extract tables to CSV."
     />
     <meta property="og:url" content="https://w1neskin.github.io/pdf-epub-converter/" />
     <meta property="og:image" content="https://w1neskin.github.io/pdf-epub-converter/logo512.png" />
+    <meta property="og:image:alt" content="PDF to EPUB Converter application logo" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
 
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Free PDF to EPUB Converter" />
+    <meta name="twitter:title" content="Free PDF to EPUB Converter & Table Export" />
     <meta
       name="twitter:description"
-      content="Free online tool to convert PDF files to EPUB. 50MB and 50-page limit. Sign in to save books."
+      content="Convert PDF to fixed-layout EPUB, readable XLSX, or table-only CSV files."
     />
+    <meta name="twitter:image" content="https://w1neskin.github.io/pdf-epub-converter/logo512.png" />
 
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
@@ -46,21 +47,45 @@
       "@context": "https://schema.org",
       "@graph": [
         {
-          "@type": "WebApplication",
+          "@type": "WebSite",
+          "@id": "https://w1neskin.github.io/pdf-epub-converter/#website",
           "name": "PDF to EPUB Converter",
           "url": "https://w1neskin.github.io/pdf-epub-converter/",
+          "inLanguage": "en"
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://w1neskin.github.io/pdf-epub-converter/#application",
+          "name": "PDF to EPUB Converter",
+          "url": "https://w1neskin.github.io/pdf-epub-converter/",
+          "isPartOf": {
+            "@id": "https://w1neskin.github.io/pdf-epub-converter/#website"
+          },
           "applicationCategory": "UtilitiesApplication",
           "operatingSystem": "Any",
           "browserRequirements": "Requires JavaScript",
+          "image": "https://w1neskin.github.io/pdf-epub-converter/logo512.png",
+          "sameAs": [
+            "https://github.com/W1neSkin/pdf-epub-converter"
+          ],
+          "featureList": [
+            "Fixed-layout PDF to EPUB conversion",
+            "Selectable text overlay",
+            "Readable XLSX document export",
+            "PDF table extraction to CSV",
+            "Built-in EPUB reader",
+            "Personal book library"
+          ],
           "offers": {
             "@type": "Offer",
             "price": "0",
             "priceCurrency": "USD"
           },
-          "description": "Free web app that converts PDF files to EPUB. Maximum file size 50MB and 50 pages. Create a free account to convert and store books."
+          "description": "Free web app that converts PDF files to fixed-layout EPUB with selectable text, exports readable XLSX workbooks, and extracts tables to CSV. Maximum file size 50MB and 50 pages."
         },
         {
           "@type": "FAQPage",
+          "@id": "https://w1neskin.github.io/pdf-epub-converter/#faq",
           "mainEntity": [
             {
               "@type": "Question",
@@ -93,6 +118,22 @@
                 "@type": "Answer",
                 "text": "In this site's reader, or in apps that open EPUB files such as Apple Books, Google Play Books, and many Kindle workflows that accept EPUB."
               }
+            },
+            {
+              "@type": "Question",
+              "name": "Does the EPUB preserve the original PDF layout?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Each PDF page is rendered as a fixed-layout EPUB page with an invisible selectable text layer."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I export PDF text and tables?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Export a readable XLSX workbook, one combined table CSV, or a ZIP containing one CSV per detected table."
+              }
             }
           ]
         }
@@ -104,15 +145,20 @@
     <noscript>
       <h1>Free PDF to EPUB Converter</h1>
       <p>
-        This is a free online tool that converts PDF files to EPUB books.
-        Enable JavaScript to upload a file. Limits: 50MB, 50 pages. A free
-        account is required.
+        This free online tool converts PDF files to fixed-layout EPUB books
+        with selectable text. It also exports readable XLSX workbooks and
+        extracts PDF tables to CSV. Limits: 50MB and 50 pages.
       </p>
       <p>
         Site:
         <a href="https://w1neskin.github.io/pdf-epub-converter/">
           https://w1neskin.github.io/pdf-epub-converter/
         </a>
+      </p>
+      <p>
+        <a href="./features.html">Features</a> ·
+        <a href="./how-to.html">How to use</a> ·
+        <a href="./privacy.html">Privacy</a>
       </p>
     </noscript>
     <div id="root"></div>

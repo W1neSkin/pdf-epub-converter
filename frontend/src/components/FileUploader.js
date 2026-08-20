@@ -1,5 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react';
 import styled from 'styled-components';
+import {
+  ButtonRow,
+  DropArea,
+  Panel,
+  PrimaryAction,
+  SecondaryAction,
+} from './ui';
 
 const Wrapper = styled.section`
   width: 100%;
@@ -7,35 +14,8 @@ const Wrapper = styled.section`
   margin: 0 auto;
 `;
 
-const Card = styled.div`
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 1.2rem;
-`;
-
-const DropZone = styled.div`
-  border: 2px dashed ${(props) => (props.$active ? '#facc15' : 'rgba(255, 255, 255, 0.35)')};
-  border-radius: 0.9rem;
-  background: ${(props) => (props.$active ? 'rgba(250, 204, 21, 0.12)' : 'rgba(255, 255, 255, 0.03)')};
-  text-align: center;
-  padding: 2rem 1rem;
-`;
-
 const HiddenInput = styled.input`
   display: none;
-`;
-
-const ChooseButton = styled.button`
-  margin-top: 1rem;
-  border: none;
-  border-radius: 0.65rem;
-  background: #facc15;
-  color: #111827;
-  font-weight: 700;
-  min-height: 2.8rem;
-  padding: 0.4rem 1.1rem;
-  cursor: pointer;
 `;
 
 const ErrorText = styled.div`
@@ -43,7 +23,7 @@ const ErrorText = styled.div`
   color: #fecaca;
 `;
 
-const FileUploader = ({ onFileSelect }) => {
+const FileUploader = ({ onFileSelect, onBack }) => {
   const [isDragActive, setIsDragActive] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef(null);
@@ -79,8 +59,14 @@ const FileUploader = ({ onFileSelect }) => {
 
   return (
     <Wrapper>
-      <Card>
-        <DropZone
+      <div style={{ marginBottom: '1rem' }}>
+        <h2 style={{ marginBottom: '0.35rem' }}>Open EPUB from device</h2>
+        <p style={{ color: 'rgba(255,255,255,0.72)' }}>
+          Open an existing EPUB without adding it to your library.
+        </p>
+      </div>
+      <Panel>
+        <DropArea
           $active={isDragActive}
           onDragEnter={handleDrag}
           onDragOver={handleDrag}
@@ -88,13 +74,20 @@ const FileUploader = ({ onFileSelect }) => {
           onDrop={handleDrop}
         >
           <i className="fas fa-book-open" style={{ fontSize: '2.6rem', color: '#facc15' }} aria-hidden="true"></i>
-          <h3 style={{ margin: '0.7rem 0 0.35rem' }}>Open an EPUB file</h3>
+          <h3 style={{ margin: '0.7rem 0 0.35rem' }}>Drop an EPUB here</h3>
           <p style={{ color: 'rgba(255,255,255,0.8)' }}>
-            Drop an EPUB here or choose a file manually.
+            Or select a file from your device.
           </p>
-          <ChooseButton type="button" onClick={() => inputRef.current?.click()}>
-            Choose EPUB
-          </ChooseButton>
+          <ButtonRow style={{ justifyContent: 'center', marginTop: '1rem' }}>
+            <PrimaryAction type="button" onClick={() => inputRef.current?.click()}>
+              Choose EPUB
+            </PrimaryAction>
+            {onBack && (
+              <SecondaryAction type="button" onClick={onBack}>
+                Back to library
+              </SecondaryAction>
+            )}
+          </ButtonRow>
           <HiddenInput
             ref={inputRef}
             type="file"
@@ -102,8 +95,8 @@ const FileUploader = ({ onFileSelect }) => {
             onChange={(event) => selectFile(event.target.files?.[0])}
           />
           {error && <ErrorText>{error}</ErrorText>}
-        </DropZone>
-      </Card>
+        </DropArea>
+      </Panel>
     </Wrapper>
   );
 };

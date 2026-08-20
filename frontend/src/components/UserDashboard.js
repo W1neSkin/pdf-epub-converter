@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { API_BASE_URL } from '../config';
+import {
+  ButtonRow,
+  DangerAction,
+  Panel,
+  PrimaryAction,
+  SecondaryAction,
+} from './ui';
 
 const DashboardContainer = styled.div`
   width: 100%;
@@ -8,6 +15,11 @@ const DashboardContainer = styled.div`
 
 const HeaderBlock = styled.div`
   margin-bottom: 1.25rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
 `;
 
 const Title = styled.h2`
@@ -27,10 +39,7 @@ const StatsGrid = styled.div`
   margin: 1rem 0 1.5rem;
 `;
 
-const StatCard = styled.div`
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 0.85rem;
+const StatCard = styled(Panel)`
   padding: 1rem;
 `;
 
@@ -63,10 +72,7 @@ const BooksGrid = styled.div`
   gap: 0.9rem;
 `;
 
-const BookCard = styled.article`
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 0.8rem;
+const BookCard = styled(Panel).attrs({ as: 'article' })`
   padding: 0.95rem;
 `;
 
@@ -82,22 +88,13 @@ const BookMeta = styled.div`
   line-height: 1.45;
 `;
 
-const Actions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
+const Actions = styled(ButtonRow)`
   margin-top: 0.85rem;
-`;
 
-const Button = styled.button`
-  min-height: 2.4rem;
-  border-radius: 0.55rem;
-  border: 1px solid ${(props) => (props.$danger ? 'rgba(248, 113, 113, 0.75)' : 'rgba(255, 255, 255, 0.26)')};
-  background: ${(props) => (props.$danger ? 'rgba(248, 113, 113, 0.14)' : 'rgba(255, 255, 255, 0.1)')};
-  color: ${(props) => (props.$danger ? '#fecaca' : 'white')};
-  padding: 0.45rem 0.7rem;
-  cursor: pointer;
-  font-weight: 600;
+  button {
+    min-height: 2.4rem;
+    padding: 0.4rem 0.75rem;
+  }
 `;
 
 const StateBox = styled.div`
@@ -109,7 +106,12 @@ const StateBox = styled.div`
   color: ${(props) => props.$error ? '#fecaca' : 'rgba(255, 255, 255, 0.82)'};
 `;
 
-const UserDashboard = ({ user, onOpenBook }) => {
+const UserDashboard = ({
+  user,
+  onOpenBook,
+  onNavigateToConvert,
+  onOpenLocalEpub,
+}) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [books, setBooks] = useState([]);
@@ -221,11 +223,22 @@ const UserDashboard = ({ user, onOpenBook }) => {
   return (
     <DashboardContainer>
       <HeaderBlock>
-        <Title>My Library</Title>
-        <Subtitle>Open converted books, download EPUB files, and manage your collection.</Subtitle>
+        <div>
+          <Title>My Library</Title>
+          <Subtitle>Read and manage EPUB books saved after conversion.</Subtitle>
+        </div>
+        <ButtonRow>
+          <PrimaryAction type="button" onClick={onNavigateToConvert}>
+            <i className="fas fa-plus" aria-hidden="true"></i>
+            Convert PDF
+          </PrimaryAction>
+          <SecondaryAction type="button" onClick={onOpenLocalEpub}>
+            Open EPUB from device
+          </SecondaryAction>
+        </ButtonRow>
       </HeaderBlock>
 
-      {stats && (
+      {stats && Number(stats.total_books || 0) > 0 && (
         <StatsGrid>
           <StatCard>
             <StatValue>{stats.total_books || 0}</StatValue>
@@ -238,10 +251,6 @@ const UserDashboard = ({ user, onOpenBook }) => {
           <StatCard>
             <StatValue>{stats.total_pages || 0}</StatValue>
             <StatLabel>Total pages</StatLabel>
-          </StatCard>
-          <StatCard>
-            <StatValue>{stats.recent_conversions || 0}</StatValue>
-            <StatLabel>Recent conversions</StatLabel>
           </StatCard>
         </StatsGrid>
       )}
@@ -257,29 +266,42 @@ const UserDashboard = ({ user, onOpenBook }) => {
       )}
 
       {filteredBooks.length === 0 ? (
-        <StateBox>{books.length ? 'No books match this search.' : 'No books yet. Convert your first PDF.'}</StateBox>
+        <StateBox>
+          <div>{books.length ? 'No books match this search.' : 'No EPUB books yet.'}</div>
+          {!books.length && (
+            <Actions style={{ justifyContent: 'center' }}>
+              <PrimaryAction type="button" onClick={onNavigateToConvert}>
+                Convert your first PDF
+              </PrimaryAction>
+              <SecondaryAction type="button" onClick={onOpenLocalEpub}>
+                Open an EPUB file
+              </SecondaryAction>
+            </Actions>
+          )}
+        </StateBox>
       ) : (
         <BooksGrid>
           {filteredBooks.map((book) => (
             <BookCard key={book.id}>
               <BookName>{book.title || book.original_filename || 'Untitled book'}</BookName>
               <BookMeta>
-                <div>File: {book.original_filename || 'Unknown'}</div>
+                {book.original_filename && book.original_filename !== book.title && (
+                  <div>File: {book.original_filename}</div>
+                )}
                 <div>Size: {formatFileSize(book.file_size)}</div>
                 <div>Pages: {book.pages || 0}</div>
-                <div>Words: {(book.words || 0).toLocaleString()}</div>
               </BookMeta>
 
               <Actions>
-                <Button type="button" onClick={() => onOpenBook && onOpenBook(book)}>
+                <PrimaryAction type="button" onClick={() => onOpenBook && onOpenBook(book)}>
                   Read
-                </Button>
-                <Button type="button" onClick={() => downloadBook(book)}>
+                </PrimaryAction>
+                <SecondaryAction type="button" onClick={() => downloadBook(book)}>
                   Download
-                </Button>
-                <Button type="button" $danger onClick={() => deleteBook(book.id)}>
+                </SecondaryAction>
+                <DangerAction type="button" onClick={() => deleteBook(book.id)}>
                   Delete
-                </Button>
+                </DangerAction>
               </Actions>
             </BookCard>
           ))}

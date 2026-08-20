@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import App from './App';
 
 beforeEach(() => {
@@ -10,7 +10,38 @@ beforeEach(() => {
 
 test('renders app title', () => {
   render(<App />);
-  expect(screen.getAllByText(/PDF to EPUB Converter/i).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/PDF Converter|PDF to EPUB/i).length).toBeGreaterThan(0);
+});
+
+test('opens Convert after signing in from the landing page', async () => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify({
+      success: true,
+      data: {
+        access_token: 'token',
+        user_id: 'user-1',
+      },
+    }),
+  });
+
+  render(<App />);
+  fireEvent.click(await screen.findByRole('button', { name: /Start converting/i }));
+
+  const dialog = screen.getByRole('dialog', { name: /Authentication/i });
+  expect(
+    within(dialog).getByRole('button', { name: /Close authentication dialog/i })
+  ).toHaveFocus();
+  fireEvent.change(within(dialog).getByLabelText(/Email/i), {
+    target: { value: 'reader@example.com' },
+  });
+  fireEvent.change(within(dialog).getByLabelText(/Password/i), {
+    target: { value: 'password123' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: /^Sign in$/i }));
+
+  expect(await screen.findByText(/Convert or export PDF/i)).toBeInTheDocument();
 });
 
 test('shows persistent navigation for authenticated user', async () => {
@@ -44,9 +75,10 @@ test('shows persistent navigation for authenticated user', async () => {
   });
   render(<App />);
 
-  expect(await screen.findByRole('button', { name: /Library/i })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Convert PDF/i })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Read EPUB/i })).toBeInTheDocument();
+  const navigation = await screen.findByRole('navigation', { name: /Main navigation/i });
+  expect(within(navigation).getByRole('button', { name: /^Library$/i })).toBeInTheDocument();
+  expect(within(navigation).getByRole('button', { name: /^Convert$/i })).toBeInTheDocument();
+  expect(within(navigation).queryByRole('button', { name: /Read EPUB/i })).not.toBeInTheDocument();
 
   localStorage.removeItem('authToken');
   localStorage.removeItem('userData');

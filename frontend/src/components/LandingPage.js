@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import styled from 'styled-components';
 import AuthForm from './AuthForm';
 import LandingFaq from './LandingFaq';
 
 const Page = styled.section`
   width: 100%;
+`;
+
+const LandingContent = styled.div`
   display: grid;
   gap: 1.25rem;
 `;
@@ -63,40 +67,9 @@ const CardText = styled.p`
   font-size: 0.92rem;
 `;
 
-const StatValue = styled.div`
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: #facc15;
-`;
-
-const Steps = styled.ol`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 0.8rem;
-  list-style: none;
-  counter-reset: step;
-`;
-
-const Step = styled.li`
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.07);
-  padding: 0.95rem;
-  counter-increment: step;
-
-  &::before {
-    content: counter(step);
-    display: inline-flex;
-    width: 1.8rem;
-    height: 1.8rem;
-    border-radius: 999px;
-    align-items: center;
-    justify-content: center;
-    background: #facc15;
-    color: #111827;
-    font-weight: 700;
-    margin-bottom: 0.55rem;
-  }
+const SectionTitle = styled.h2`
+  margin-bottom: 0.8rem;
+  font-size: 1.35rem;
 `;
 
 const Modal = styled.div`
@@ -113,7 +86,12 @@ const Modal = styled.div`
 const ModalInner = styled.div`
   width: 100%;
   max-width: 460px;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
   position: relative;
+  border-radius: 0.9rem;
+  background: #111827;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.55);
 `;
 
 const CloseButton = styled.button`
@@ -130,69 +108,112 @@ const CloseButton = styled.button`
   z-index: 2;
 `;
 
-const LandingPage = ({ onAuthSuccess }) => {
+const LandingPage = ({ authRequest = 0, onAuthSuccess }) => {
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const modalRef = useRef(null);
+  const closeButtonRef = useRef(null);
+
+  useEffect(() => {
+    if (authRequest > 0) {
+      setShowAuthModal(true);
+    }
+  }, [authRequest]);
+
+  useEffect(() => {
+    if (!showAuthModal) return undefined;
+
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const appRoot = document.getElementById('root');
+    document.body.style.overflow = 'hidden';
+    appRoot?.setAttribute('inert', '');
+    appRoot?.setAttribute('aria-hidden', 'true');
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowAuthModal(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !modalRef.current) return;
+
+      const controls = modalRef.current.querySelectorAll(
+        'button:not(:disabled), input:not(:disabled), [href]'
+      );
+      if (!controls.length) return;
+
+      const firstControl = controls[0];
+      const lastControl = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === firstControl) {
+        event.preventDefault();
+        lastControl.focus();
+      } else if (!event.shiftKey && document.activeElement === lastControl) {
+        event.preventDefault();
+        firstControl.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      appRoot?.removeAttribute('inert');
+      appRoot?.removeAttribute('aria-hidden');
+      previousFocus?.focus();
+    };
+  }, [showAuthModal]);
 
   return (
     <Page>
-      <Hero>
-        <HeroTitle>Free PDF to EPUB converter</HeroTitle>
-        <HeroText>
-          Upload a PDF and get a readable EPUB with selectable text. Free plan: up to 50 MB and 50 pages.
-        </HeroText>
-        <CTA type="button" onClick={() => setShowAuthModal(true)}>
-          Start converting
-        </CTA>
-      </Hero>
+      <LandingContent
+        inert={showAuthModal ? true : undefined}
+        aria-hidden={showAuthModal ? 'true' : undefined}
+      >
+        <Hero>
+          <HeroTitle>PDF to EPUB or Excel — without the guesswork</HeroTitle>
+          <HeroText>
+            Choose a book for reading or a spreadsheet for working with document
+            data. The free plan supports PDF files up to 50MB and 50 pages.
+          </HeroText>
+          <CTA type="button" onClick={() => setShowAuthModal(true)}>
+            Start converting
+          </CTA>
+        </Hero>
 
-      <Grid>
         <Card>
-          <StatValue>50 MB</StatValue>
-          <CardText>Maximum PDF file size on the free plan.</CardText>
+          <SectionTitle>Choose what you need</SectionTitle>
+          <Grid>
+            <Card>
+              <CardTitle>EPUB book</CardTitle>
+              <CardText>
+                Preserves the original PDF pages and adds selectable text. Read it
+                in the browser or download the EPUB.
+              </CardText>
+            </Card>
+            <Card>
+              <CardTitle>Excel + tables</CardTitle>
+              <CardText>
+                Creates a readable XLSX workbook, one combined CSV, and a ZIP with
+                separate tables.
+              </CardText>
+            </Card>
+          </Grid>
         </Card>
-        <Card>
-          <StatValue>50 pages</StatValue>
-          <CardText>Maximum page count on the free plan.</CardText>
-        </Card>
-        <Card>
-          <StatValue>EPUB</StatValue>
-          <CardText>Download or open converted books in the browser reader.</CardText>
-        </Card>
-      </Grid>
 
-      <Card>
-        <CardTitle>How it works</CardTitle>
-        <Steps>
-          <Step>
-            <CardText>Upload a PDF by drag-and-drop or file picker.</CardText>
-          </Step>
-          <Step>
-            <CardText>The service extracts text and builds a reflowable EPUB.</CardText>
-          </Step>
-          <Step>
-            <CardText>Download the EPUB or open it from your library.</CardText>
-          </Step>
-        </Steps>
-      </Card>
+        <Grid aria-label="Free plan limits">
+          <Card>
+            <CardTitle>50 MB maximum</CardTitle>
+            <CardText>Maximum PDF file size on the free plan.</CardText>
+          </Card>
+          <Card>
+            <CardTitle>50 pages maximum</CardTitle>
+            <CardText>Maximum page count on the free plan.</CardText>
+          </Card>
+        </Grid>
 
-      <Grid>
-        <Card>
-          <CardTitle>Personal library</CardTitle>
-          <CardText>Every converted book is saved in your account.</CardText>
-        </Card>
-        <Card>
-          <CardTitle>In-browser reading</CardTitle>
-          <CardText>Open EPUB files directly in the built-in reader.</CardText>
-        </Card>
-        <Card>
-          <CardTitle>Cross-device</CardTitle>
-          <CardText>Use desktop or mobile browser. EPUB also works in external apps.</CardText>
-        </Card>
-      </Grid>
-
-      <LandingFaq />
-
-      {showAuthModal && (
+        <LandingFaq />
+      </LandingContent>
+      {showAuthModal && createPortal(
         <Modal
           role="dialog"
           aria-modal="true"
@@ -203,8 +224,9 @@ const LandingPage = ({ onAuthSuccess }) => {
             }
           }}
         >
-          <ModalInner>
+          <ModalInner ref={modalRef}>
             <CloseButton
+              ref={closeButtonRef}
               type="button"
               aria-label="Close authentication dialog"
               onClick={() => setShowAuthModal(false)}
@@ -218,7 +240,8 @@ const LandingPage = ({ onAuthSuccess }) => {
               }}
             />
           </ModalInner>
-        </Modal>
+        </Modal>,
+        document.body
       )}
     </Page>
   );

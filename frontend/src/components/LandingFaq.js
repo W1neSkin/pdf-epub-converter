@@ -50,6 +50,20 @@ const Footer = styled.footer`
   line-height: 1.6;
 `;
 
+const ResourceLinks = styled.nav`
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem 1.1rem;
+
+  a {
+    color: #fde047;
+    text-decoration: underline;
+    text-underline-offset: 0.2rem;
+  }
+`;
+
 const faqs = [
   {
     q: 'What is this PDF to EPUB converter?',
@@ -66,6 +80,14 @@ const faqs = [
   {
     q: 'Where can I read the EPUB?',
     a: 'In the built-in reader, or in apps that open EPUB files such as Apple Books and Google Play Books.'
+  },
+  {
+    q: 'Does the EPUB preserve the original PDF layout?',
+    a: 'Yes. Each PDF page is rendered as a fixed-layout EPUB page with an invisible selectable text layer.'
+  },
+  {
+    q: 'Can I export PDF text and tables?',
+    a: 'Yes. Export a readable XLSX workbook, one combined table CSV, or a ZIP containing one CSV per detected table.'
   }
 ];
 
@@ -82,9 +104,19 @@ function LandingFaq() {
         ))}
       </List>
       <Footer>
-        PDF to EPUB Converter is a free web app.
-        It is not a local shop and has no office address.
-        Use it from any country in a browser.
+        PDF to EPUB Converter is a free, open-source web application.
+        <ResourceLinks aria-label="Project information">
+          <a href="./features.html">Features</a>
+          <a href="./how-to.html">How to use</a>
+          <a href="./privacy.html">Privacy</a>
+          <a
+            href="https://github.com/W1neSkin/pdf-epub-converter"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Source code
+          </a>
+        </ResourceLinks>
       </Footer>
     </Section>
   );

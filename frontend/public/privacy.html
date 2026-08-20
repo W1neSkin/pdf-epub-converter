@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="index, follow, max-snippet:-1" />
+    <title>Privacy — PDF to EPUB Converter</title>
+    <meta
+      name="description"
+      content="How the PDF to EPUB Converter processes uploaded documents, account data, generated EPUB files, spreadsheet exports and anonymous site analytics."
+    />
+    <link rel="canonical" href="https://w1neskin.github.io/pdf-epub-converter/privacy.html" />
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./seo.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./">PDF to EPUB Converter</a>
+      <nav aria-label="Project pages">
+        <a href="./features.html">Features</a>
+        <a href="./how-to.html">How to use</a>
+        <a href="./privacy.html">Privacy</a>
+      </nav>
+    </header>
+    <main>
+      <h1>Privacy information</h1>
+      <p class="lead">
+        This page explains the current data flow of the open-source PDF
+        conversion application.
+      </p>
+
+      <section class="card">
+        <h2>Account information</h2>
+        <p>
+          Registration and authentication are provided through Supabase. The
+          application uses your account identifier and email address to protect
+          downloads and associate EPUB books with your library.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Uploaded PDF files</h2>
+        <p>
+          PDFs are sent to the conversion service for processing. Temporary
+          input files are removed after the conversion job finishes. Do not
+          upload a document if you are not authorized to process it.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Generated files</h2>
+        <p>
+          EPUB files saved to the personal library can be stored through
+          Cloudinary, while library metadata is stored in Supabase. XLSX and CSV
+          exports are generated as conversion downloads and are not added to the
+          EPUB library.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Site analytics</h2>
+        <p>
+          The public website uses GoatCounter to measure page visits. The
+          analytics integration is separate from PDF conversion and document
+          storage.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Open-source transparency</h2>
+        <p>
+          The application code and service configuration are available in the
+          public GitHub repository. Privacy questions and technical issues can
+          be reported through GitHub Issues.
+        </p>
+      </section>
+
+      <a class="button" href="./">Return to the converter</a>
+    </main>
+    <footer>
+      <a href="https://github.com/W1neSkin/pdf-epub-converter">Source code</a> ·
+      <a href="https://github.com/W1neSkin/pdf-epub-converter/issues">GitHub Issues</a>
+    </footer>
+  </body>
+</html>

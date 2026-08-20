@@ -21,6 +21,18 @@ const GlobalStyle = createGlobalStyle`
     color: #ffffff;
     min-height: 100vh;
   }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  a:focus-visible {
+    outline: 3px solid rgba(250, 204, 21, 0.4);
+    outline-offset: 2px;
+  }
 `;
 
 const AppShell = styled.div`
@@ -37,6 +49,10 @@ const Header = styled.header`
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   padding: 0.9rem 1rem;
+
+  @media (max-width: 640px) {
+    padding: 0.7rem 0.75rem;
+  }
 `;
 
 const HeaderRow = styled.div`
@@ -101,6 +117,11 @@ const NavBar = styled.nav`
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+
+  @media (max-width: 640px) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 `;
 
 const NavButton = styled.button`
@@ -114,6 +135,7 @@ const NavButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  justify-content: center;
 `;
 
 const Main = styled.main`
@@ -147,6 +169,7 @@ function App() {
   const [epubFile, setEpubFile] = useState(null);
   const [epubUrl, setEpubUrl] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [landingAuthRequest, setLandingAuthRequest] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -199,13 +222,17 @@ function App() {
     setEpubUrl(null);
   }, []);
 
-  const handleLogin = useCallback((userData) => {
+  const handleLogin = useCallback((userData, destination = VIEW_DASHBOARD) => {
     setUser(userData);
-    goDashboard();
-  }, [goDashboard]);
+    setLandingAuthRequest(0);
+    setEpubFile(null);
+    setEpubUrl(null);
+    setCurrentView(destination);
+  }, []);
 
   const handleLogout = useCallback(() => {
     setUser(null);
+    setLandingAuthRequest(0);
     localStorage.removeItem('authToken');
     localStorage.removeItem('userData');
     setCurrentView(VIEW_DASHBOARD);
@@ -223,6 +250,23 @@ function App() {
     setCurrentView(VIEW_READ);
   }, []);
 
+  const openLocalEpub = useCallback(() => {
+    setEpubFile(null);
+    setEpubUrl(null);
+    setCurrentView(VIEW_READ);
+  }, []);
+
+  const openConverter = useCallback(() => {
+    setCurrentView(VIEW_CONVERT);
+  }, []);
+
+  const handleEpubGenerated = useCallback((url) => {
+    if (!url) return;
+    setEpubFile(null);
+    setEpubUrl(url);
+    setCurrentView(VIEW_READ);
+  }, []);
+
   const handleOpenLibraryBook = useCallback((book) => {
     if (!book?.id) return;
     setEpubFile(null);
@@ -232,13 +276,20 @@ function App() {
 
   const renderAuthenticatedContent = () => {
     if (currentView === VIEW_CONVERT) {
-      return <PdfUploader onBack={goDashboard} user={user} onSessionExpired={handleSessionExpired} />;
+      return (
+        <PdfUploader
+          onBack={goDashboard}
+          onEpubGenerated={handleEpubGenerated}
+          user={user}
+          onSessionExpired={handleSessionExpired}
+        />
+      );
     }
     if (currentView === VIEW_READ) {
       if (!epubFile && !epubUrl) {
         return (
           <ReaderUploadWrap>
-            <FileUploader onFileSelect={handleFileSelect} />
+            <FileUploader onFileSelect={handleFileSelect} onBack={goDashboard} />
           </ReaderUploadWrap>
         );
       }
@@ -251,7 +302,14 @@ function App() {
         />
       );
     }
-    return <UserDashboard user={user} onOpenBook={handleOpenLibraryBook} />;
+    return (
+      <UserDashboard
+        user={user}
+        onOpenBook={handleOpenLibraryBook}
+        onNavigateToConvert={openConverter}
+        onOpenLocalEpub={openLocalEpub}
+      />
+    );
   };
 
   return (
@@ -262,7 +320,7 @@ function App() {
           <HeaderRow>
             <BrandButton type="button" onClick={goDashboard}>
               <i className="fas fa-file-pdf" aria-hidden="true"></i>
-              <span>PDF to EPUB Converter</span>
+              <span>PDF Converter</span>
             </BrandButton>
 
             {user ? (
@@ -273,9 +331,13 @@ function App() {
                 </TopButton>
               </UserPanel>
             ) : (
-              <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.95rem' }}>
-                Free account required for conversion
-              </div>
+              <TopButton
+                type="button"
+                $accent
+                onClick={() => setLandingAuthRequest((value) => value + 1)}
+              >
+                Sign in
+              </TopButton>
             )}
           </HeaderRow>
 
@@ -295,15 +357,7 @@ function App() {
                 onClick={() => setCurrentView(VIEW_CONVERT)}
               >
                 <i className="fas fa-file-pdf" aria-hidden="true"></i>
-                Convert PDF
-              </NavButton>
-              <NavButton
-                type="button"
-                $active={currentView === VIEW_READ}
-                onClick={() => setCurrentView(VIEW_READ)}
-              >
-                <i className="fas fa-book-open" aria-hidden="true"></i>
-                Read EPUB
+                Convert
               </NavButton>
             </NavBar>
           )}
@@ -318,7 +372,10 @@ function App() {
               </div>
             </LoadingState>
           ) : !user ? (
-            <LandingPage onAuthSuccess={handleLogin} />
+            <LandingPage
+              authRequest={landingAuthRequest}
+              onAuthSuccess={(userData) => handleLogin(userData, VIEW_CONVERT)}
+            />
           ) : (
             renderAuthenticatedContent()
           )}

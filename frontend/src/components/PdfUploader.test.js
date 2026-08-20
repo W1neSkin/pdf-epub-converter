@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PdfUploader from './PdfUploader';
+import { CONVERTER_BASE_URL } from '../config';
 import { getPdfInfo } from '../pdfInfo';
 
 jest.mock('../pdfInfo', () => ({
@@ -44,7 +45,15 @@ describe('PdfUploader', () => {
       return Promise.resolve({ ok: true, json: async () => ({}) });
     });
 
-    const { container } = render(<PdfUploader user={user} onEpubGenerated={jest.fn()} onBack={jest.fn()} />);
+    const onEpubGenerated = jest.fn();
+    const { container } = render(
+      <PdfUploader
+        user={user}
+        onEpubGenerated={onEpubGenerated}
+        onBack={jest.fn()}
+      />
+    );
+    expect(screen.getAllByRole('button', { name: /^Choose PDF$/i })).toHaveLength(1);
     const input = container.querySelector('input[type="file"]');
     const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
 
@@ -53,6 +62,11 @@ describe('PdfUploader', () => {
     await waitFor(() => {
       expect(screen.getByText(/EPUB generated successfully/i)).toBeInTheDocument();
     });
+    expect(onEpubGenerated).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Open in reader/i }));
+    expect(onEpubGenerated).toHaveBeenCalledWith(
+      `${CONVERTER_BASE_URL}/api/download/id-1`
+    );
 
     const convertCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('/api/convert'));
     expect(convertCalls).toHaveLength(1);
@@ -129,6 +143,8 @@ describe('PdfUploader', () => {
             output_kind: 'xlsx',
             download_name: 'sample_document.xlsx',
             document_row_count: 12,
+            table_count: 2,
+            row_count: 10,
             tables_download_url: '/api/download/csv-1?kind=tables',
             tables_download_name: 'sample_tables.csv',
             archive_download_url: '/api/download/csv-1?kind=archive',
@@ -140,7 +156,8 @@ describe('PdfUploader', () => {
     });
 
     const { container } = render(<PdfUploader user={user} onEpubGenerated={jest.fn()} onBack={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /Export document \(XLSX\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Excel \+ tables/i }));
+    expect(screen.getAllByRole('button', { name: /^Choose PDF$/i })).toHaveLength(1);
 
     const input = container.querySelector('input[type="file"]');
     const file = new File(['pdf'], 'sample.pdf', { type: 'application/pdf' });
@@ -149,10 +166,10 @@ describe('PdfUploader', () => {
     await waitFor(() => {
       expect(screen.getByText(/Excel document generated successfully/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Download readable document \(XLSX\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Download tables only \(CSV\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Download separate tables \(ZIP\)/i })).toBeInTheDocument();
-    expect(screen.getByText(/Document rows: 12/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download XLSX/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download CSV/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download ZIP/i })).toBeInTheDocument();
+    expect(screen.getByText(/Found 2 tables and 10 table rows/i)).toBeInTheDocument();
 
     const csvCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('/api/extract-tables'));
     expect(csvCalls).toHaveLength(1);

@@ -55,13 +55,17 @@ const TocContent = styled.div`
   }
 `;
 
-const PageItem = styled.div`
+const PageItem = styled.button`
+  width: 100%;
+  border: 0;
   padding: 0.8rem 1rem;
+  color: white;
+  text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
-  background: ${props => props.isActive ? 'rgba(255, 215, 0, 0.2)' : 'transparent'};
-  border-left-color: ${props => props.isActive ? '#ffd700' : 'transparent'};
+  background: ${props => props.$isActive ? 'rgba(255, 215, 0, 0.2)' : 'transparent'};
+  border-left-color: ${props => props.$isActive ? '#ffd700' : 'transparent'};
 
   &:hover {
     background: rgba(255, 255, 255, 0.1);
@@ -96,7 +100,9 @@ const TableOfContents = ({ pages, currentPageIndex, onPageSelect, bookMetadata }
         {pages.map((page, index) => (
           <PageItem
             key={page.id || index}
-            isActive={currentPageIndex === index}
+            type="button"
+            $isActive={currentPageIndex === index}
+            aria-current={currentPageIndex === index ? 'page' : undefined}
             onClick={() => onPageSelect(index)}
           >
             <PageNumber>Page {index + 1}</PageNumber>

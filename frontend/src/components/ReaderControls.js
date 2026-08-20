@@ -5,16 +5,23 @@ const ControlsContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1rem;
   background: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   color: white;
+
+  @media (max-width: 720px) {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.55rem;
+    padding: 0.55rem;
+  }
 `;
 
 const LeftControls = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
 `;
 
 const CenterInfo = styled.div`
@@ -25,6 +32,11 @@ const CenterInfo = styled.div`
   flex: 1;
   max-width: 400px;
   margin: 0 2rem;
+
+  @media (max-width: 720px) {
+    min-width: 0;
+    margin: 0;
+  }
 `;
 
 const BookTitle = styled.h2`
@@ -35,6 +47,11 @@ const BookTitle = styled.h2`
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+
+  @media (max-width: 720px) {
+    font-size: 0.9rem;
+    margin-bottom: 0.15rem;
+  }
 `;
 
 const PageInfo = styled.div`
@@ -43,6 +60,15 @@ const PageInfo = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
+
+  @media (max-width: 720px) {
+    font-size: 0.78rem;
+
+    > :last-child,
+    > div {
+      display: none;
+    }
+  }
 `;
 
 const ProgressBar = styled.div`
@@ -54,7 +80,7 @@ const ProgressBar = styled.div`
 `;
 
 const ProgressFill = styled.div`
-  width: ${props => props.progress}%;
+  width: ${props => props.$progress}%;
   height: 100%;
   background: #ffd700;
   transition: width 0.3s ease;
@@ -93,6 +119,11 @@ const ControlButton = styled.button`
   i {
     font-size: 1rem;
   }
+
+  &:focus-visible {
+    outline: 3px solid rgba(250, 204, 21, 0.35);
+    outline-offset: 2px;
+  }
 `;
 
 const TocButton = styled(ControlButton)`
@@ -105,6 +136,15 @@ const BackButton = styled(ControlButton)`
   min-width: 90px;
   padding: 0.5rem 0.85rem;
   gap: 0.5rem;
+
+  @media (max-width: 720px) {
+    min-width: 44px;
+    padding: 0.5rem;
+
+    span {
+      display: none;
+    }
+  }
 `;
 
 const NavigationControls = styled.div`
@@ -148,8 +188,8 @@ const ReaderControls = ({
         <TocButton
           onClick={onTocToggle}
           $isActive={isTocOpen}
-          title="Toggle table of contents"
-          aria-label="Toggle table of contents"
+          title="Toggle pages"
+          aria-label="Toggle pages"
         >
           <i className="fas fa-list"></i>
         </TocButton>
@@ -160,7 +200,7 @@ const ReaderControls = ({
         <PageInfo>
           <span>Page {currentPageIndex + 1} of {totalPages}</span>
           <ProgressBar>
-            <ProgressFill progress={progress} />
+            <ProgressFill $progress={progress} />
           </ProgressBar>
           <span>{Math.round(progress)}%</span>
         </PageInfo>

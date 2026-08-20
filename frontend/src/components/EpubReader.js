@@ -16,12 +16,17 @@ const ReaderContainer = styled.div`
   border: 1px solid rgba(255, 255, 255, 0.2);
   overflow: hidden;
   position: relative;
+
+  @media (max-width: 720px) {
+    min-height: calc(100vh - 135px);
+    border-radius: 0.75rem;
+  }
 `;
 
 const Sidebar = styled.aside`
   width: ${(props) => (props.$isOpen ? '300px' : '0')};
   transition: width 0.25s ease;
-  background: rgba(17, 24, 39, 0.45);
+  background: rgba(17, 24, 39, 0.96);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
 
@@ -32,6 +37,20 @@ const Sidebar = styled.aside`
     bottom: 0;
     width: ${(props) => (props.$isOpen ? '280px' : '0')};
     z-index: 20;
+  }
+`;
+
+const SidebarBackdrop = styled.button`
+  display: none;
+
+  @media (max-width: 900px) {
+    display: ${(props) => (props.$isOpen ? 'block' : 'none')};
+    position: absolute;
+    inset: 0;
+    z-index: 19;
+    border: 0;
+    background: rgba(2, 6, 23, 0.56);
+    cursor: pointer;
   }
 `;
 
@@ -104,7 +123,7 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
   const [pages, setPages] = useState([]);
   const [bookMetadata, setBookMetadata] = useState({});
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [isTocOpen, setIsTocOpen] = useState(true);
+  const [isTocOpen, setIsTocOpen] = useState(() => window.innerWidth > 900);
 
   const parseEpub = useCallback(async (fileBlob) => {
     setIsLoading(true);
@@ -239,6 +258,9 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
   const handlePageChange = useCallback((pageIndex) => {
     if (pageIndex < 0 || pageIndex >= pages.length) return;
     setCurrentPageIndex(pageIndex);
+    if (window.innerWidth <= 900) {
+      setIsTocOpen(false);
+    }
   }, [pages.length]);
 
   const handleTocToggle = useCallback(() => {
@@ -277,6 +299,12 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
         </CenteredState>
       )}
 
+      <SidebarBackdrop
+        type="button"
+        $isOpen={isTocOpen}
+        aria-label="Close pages"
+        onClick={() => setIsTocOpen(false)}
+      />
       <Sidebar $isOpen={isTocOpen}>
         <TableOfContents
           pages={pages}

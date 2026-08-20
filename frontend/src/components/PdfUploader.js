@@ -2,6 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { CONVERTER_BASE_URL, MAX_PDF_MB, MAX_PDF_PAGES } from '../config';
 import { getPdfInfo } from '../pdfInfo';
+import ConversionModePicker from './ConversionModePicker';
+import {
+  ButtonRow,
+  DropArea as DropZone,
+  Panel as Card,
+  PrimaryAction as PrimaryButton,
+  SecondaryAction as GhostButton,
+} from './ui';
 
 const Wrapper = styled.section`
   width: 100%;
@@ -10,37 +18,7 @@ const Wrapper = styled.section`
 `;
 
 const HeaderRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
-`;
-
-const BackButton = styled.button`
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 0.6rem;
-  background: rgba(255, 255, 255, 0.08);
-  color: white;
-  padding: 0.7rem 0.95rem;
-  cursor: pointer;
-  font-weight: 600;
-`;
-
-const Card = styled.div`
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.08);
-  padding: clamp(1rem, 2vw, 1.5rem);
-`;
-
-const DropZone = styled.div`
-  border: 2px dashed ${(props) => (props.$active ? '#facc15' : 'rgba(255, 255, 255, 0.35)')};
-  border-radius: 0.9rem;
-  padding: 2rem 1rem;
-  text-align: center;
-  transition: border-color 0.2s ease, background 0.2s ease;
-  background: ${(props) => (props.$active ? 'rgba(250, 204, 21, 0.12)' : 'rgba(255, 255, 255, 0.03)')};
+  margin-bottom: 1rem;
 `;
 
 const Icon = styled.i`
@@ -74,54 +52,35 @@ const HiddenInput = styled.input`
   display: none;
 `;
 
-const PrimaryButton = styled.button`
-  margin-top: 1rem;
-  border: none;
-  border-radius: 0.65rem;
-  background: #facc15;
-  color: #111827;
-  font-weight: 700;
-  min-height: 2.8rem;
-  padding: 0.45rem 1.1rem;
-  cursor: pointer;
-`;
-
-const GhostButton = styled.button`
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 0.65rem;
-  background: transparent;
-  color: white;
-  min-height: 2.8rem;
-  padding: 0.45rem 1rem;
-  cursor: pointer;
-  font-weight: 600;
-`;
-
-const ButtonsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
+const Actions = styled(ButtonRow)`
   justify-content: center;
-  gap: 0.65rem;
   margin-top: 1rem;
 `;
 
-const ModeButtonsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.65rem;
-  margin-top: 0.9rem;
+const DownloadGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.7rem;
+  margin-top: 1rem;
 `;
 
-const ModeButton = styled.button`
-  border: 1px solid ${(props) => (props.$active ? '#facc15' : 'rgba(255, 255, 255, 0.28)')};
-  border-radius: 0.65rem;
-  background: ${(props) => (props.$active ? 'rgba(250, 204, 21, 0.2)' : 'transparent')};
-  color: white;
-  min-height: 2.6rem;
-  padding: 0.45rem 0.85rem;
-  cursor: pointer;
-  font-weight: 600;
+const DownloadOption = styled.div`
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.75rem;
+  padding: 0.85rem;
+  background: rgba(15, 23, 42, 0.35);
+
+  p {
+    margin: 0.35rem 0 0.75rem;
+    min-height: 2.7rem;
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.84rem;
+    line-height: 1.4;
+  }
+
+  button {
+    width: 100%;
+  }
 `;
 
 const ProgressBar = styled.div`
@@ -138,6 +97,12 @@ const ProgressFill = styled.div`
   background: linear-gradient(90deg, #facc15, #fde047);
   transition: width 0.25s ease;
 `;
+
+const resolveConverterUrl = (fileUrl) => (
+  fileUrl.startsWith('http')
+    ? fileUrl
+    : `${CONVERTER_BASE_URL}${fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`}`
+);
 
 const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -271,10 +236,6 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
     setConversionStatus(action === 'csv' ? 'Starting document extractor...' : 'Starting converter...');
 
     try {
-      if (onEpubGenerated && action === 'epub') {
-        onEpubGenerated(null);
-      }
-
       // 429 is mostly handled by API Gateway now; keep only one client retry for wake-up edge cases.
       const retryableStatuses = new Set([502, 503, 504]);
 
@@ -428,9 +389,6 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
                 rowCount: Number(statusData.row_count || 0),
               });
             }
-            if (onEpubGenerated && outputKind === 'epub') {
-              onEpubGenerated(statusData.download_url);
-            }
             return;
           }
 
@@ -463,7 +421,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
       setLimitError(error.message || 'Conversion failed.');
       lastUpload.current = { key: '', at: 0 };
     }
-  }, [cancelUpload, onEpubGenerated, onSessionExpired, user, waitWithAbort]);
+  }, [cancelUpload, onSessionExpired, user, waitWithAbort]);
 
   useEffect(() => {
     const preventBrowserDrop = (event) => {
@@ -532,9 +490,7 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
   const downloadFile = useCallback(async (fileUrl, fileName) => {
     if (!fileUrl) return;
 
-    const path = fileUrl.startsWith('http')
-      ? fileUrl
-      : `${CONVERTER_BASE_URL}${fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`}`;
+    const path = resolveConverterUrl(fileUrl);
 
     const response = await fetch(path, {
       headers: { Authorization: `Bearer ${user?.token || ''}` },
@@ -563,23 +519,38 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
   }, [onSessionExpired, user]);
 
   const isDocumentExport = jobType === 'xlsx' || jobType === 'csv';
+  const resetConversion = () => {
+    setDownloadUrl('');
+    setTablesDownloadUrl('');
+    setArchiveDownloadUrl('');
+    setProgress(0);
+    setConversionStatus('');
+    setDownloadName('converted.epub');
+    setTablesDownloadName('tables.csv');
+    setArchiveDownloadName('separate_tables.zip');
+    setJobType('epub');
+    setCsvStats({ documentRowCount: 0, tableCount: 0, rowCount: 0 });
+  };
 
   return (
     <Wrapper>
       <HeaderRow>
-        <h2 style={{ fontSize: '1.25rem' }}>
-          {selectedAction === 'csv' ? 'Export PDF content to Excel' : 'Convert PDF to EPUB'}
+        <h2 style={{ fontSize: '1.45rem', marginBottom: '0.35rem' }}>
+          Convert or export PDF
         </h2>
-        {onBack && (
-          <BackButton type="button" onClick={onBack}>
-            <i className="fas fa-arrow-left" style={{ marginRight: '0.45rem' }}></i>
-            Library
-          </BackButton>
-        )}
+        <SubText>First choose the result. Then upload one PDF file.</SubText>
       </HeaderRow>
 
       {!isConverting && !downloadUrl && (
         <Card>
+          <ConversionModePicker
+            value={selectedAction}
+            onChange={(action) => {
+              setSelectedAction(action);
+              actionRef.current = action;
+              setLimitError('');
+            }}
+          />
           <DropZone
             $active={isDragOver}
             onDragEnter={handleDragEnter}
@@ -590,8 +561,10 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             <Icon className="fas fa-file-pdf" aria-hidden="true"></Icon>
             <MainText>Drop a PDF here</MainText>
             <SubText>
-              Free plan: up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
-              {' '}Current drop mode: {selectedAction === 'csv' ? 'Excel document' : 'EPUB'}.
+              {selectedAction === 'csv'
+                ? 'Creates a readable XLSX workbook and table-only CSV downloads.'
+                : 'Creates a fixed-layout EPUB and saves it to your library.'}
+              {' '}Up to {MAX_PDF_MB} MB and {MAX_PDF_PAGES} pages.
             </SubText>
 
             {fileInfo && (
@@ -602,36 +575,14 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             )}
             {limitError && <ErrorText>{limitError}</ErrorText>}
 
-            <ModeButtonsRow>
-              <ModeButton
+            <Actions>
+              <PrimaryButton
                 type="button"
-                $active={selectedAction === 'epub'}
-                onClick={() => {
-                  setSelectedAction('epub');
-                  actionRef.current = 'epub';
-                }}
+                onClick={() => openFilePicker(selectedAction)}
               >
-                Drop mode: EPUB
-              </ModeButton>
-              <ModeButton
-                type="button"
-                $active={selectedAction === 'csv'}
-                onClick={() => {
-                  setSelectedAction('csv');
-                  actionRef.current = 'csv';
-                }}
-              >
-                Drop mode: Excel
-              </ModeButton>
-            </ModeButtonsRow>
-            <ButtonsRow>
-              <PrimaryButton type="button" onClick={() => openFilePicker('epub')}>
-                Choose PDF (EPUB)
+                Choose PDF
               </PrimaryButton>
-              <GhostButton type="button" onClick={() => openFilePicker('csv')}>
-                Export document (XLSX)
-              </GhostButton>
-            </ButtonsRow>
+            </Actions>
             <HiddenInput
               ref={fileInputRef}
               type="file"
@@ -649,11 +600,11 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             <ProgressFill $value={progress} />
           </ProgressBar>
           <div>{progress}%</div>
-          <ButtonsRow>
+          <Actions>
             <GhostButton type="button" onClick={() => cancelUpload(true)}>
               Cancel
             </GhostButton>
-          </ButtonsRow>
+          </Actions>
         </Card>
       )}
 
@@ -663,58 +614,79 @@ const PdfUploader = ({ onEpubGenerated, onBack, onSessionExpired, user }) => {
             <i className="fas fa-check-circle" style={{ color: '#4ade80', marginRight: '0.55rem' }}></i>
             {isDocumentExport ? 'Excel document generated successfully' : 'EPUB generated successfully'}
           </div>
-          <ButtonsRow>
-            <PrimaryButton
-              type="button"
-              onClick={() => downloadFile(downloadUrl, downloadName)}
-            >
-              {isDocumentExport ? 'Download readable document (XLSX)' : 'Download EPUB'}
-            </PrimaryButton>
-            {isDocumentExport && tablesDownloadUrl && (
-              <GhostButton
-                type="button"
-                onClick={() => downloadFile(tablesDownloadUrl, tablesDownloadName)}
-              >
-                Download tables only (CSV)
-              </GhostButton>
-            )}
-            {isDocumentExport && archiveDownloadUrl && (
-              <GhostButton
-                type="button"
-                onClick={() => downloadFile(archiveDownloadUrl, archiveDownloadName)}
-              >
-                Download separate tables (ZIP)
-              </GhostButton>
-            )}
-            <GhostButton
-              type="button"
-              onClick={() => {
-                setDownloadUrl('');
-                setTablesDownloadUrl('');
-                setArchiveDownloadUrl('');
-                setProgress(0);
-                setConversionStatus('');
-                setDownloadName('converted.epub');
-                setTablesDownloadName('tables.csv');
-                setArchiveDownloadName('separate_tables.zip');
-                setJobType('epub');
-                setCsvStats({ documentRowCount: 0, tableCount: 0, rowCount: 0 });
-              }}
-            >
-              Start another file
+          {isDocumentExport ? (
+            <DownloadGrid>
+              <DownloadOption>
+                <strong>Workbook</strong>
+                <p>Readable text and tables, with one worksheet per PDF page.</p>
+                <PrimaryButton
+                  type="button"
+                  onClick={() => downloadFile(downloadUrl, downloadName)}
+                >
+                  Download XLSX
+                </PrimaryButton>
+              </DownloadOption>
+              {tablesDownloadUrl && (
+                <DownloadOption>
+                  <strong>All tables</strong>
+                  <p>One CSV file for importing every detected table.</p>
+                  <GhostButton
+                    type="button"
+                    onClick={() => downloadFile(tablesDownloadUrl, tablesDownloadName)}
+                  >
+                    Download CSV
+                  </GhostButton>
+                </DownloadOption>
+              )}
+              {archiveDownloadUrl && (
+                <DownloadOption>
+                  <strong>Separate tables</strong>
+                  <p>A ZIP containing one CSV file for each detected table.</p>
+                  <GhostButton
+                    type="button"
+                    onClick={() => downloadFile(archiveDownloadUrl, archiveDownloadName)}
+                  >
+                    Download ZIP
+                  </GhostButton>
+                </DownloadOption>
+              )}
+            </DownloadGrid>
+          ) : (
+            <>
+              <Info>This EPUB was also saved to your personal library.</Info>
+              <Actions>
+                <PrimaryButton
+                  type="button"
+                  onClick={() => (
+                    onEpubGenerated && onEpubGenerated(resolveConverterUrl(downloadUrl))
+                  )}
+                >
+                  Open in reader
+                </PrimaryButton>
+                <GhostButton
+                  type="button"
+                  onClick={() => downloadFile(downloadUrl, downloadName)}
+                >
+                  Download EPUB
+                </GhostButton>
+              </Actions>
+            </>
+          )}
+          {isDocumentExport && (
+            <Info>
+              Found {csvStats.tableCount} tables and {csvStats.rowCount} table rows.
+            </Info>
+          )}
+          <Actions>
+            <GhostButton type="button" onClick={resetConversion}>
+              Convert another PDF
             </GhostButton>
             {onBack && (
               <GhostButton type="button" onClick={onBack}>
                 Back to library
               </GhostButton>
             )}
-          </ButtonsRow>
-          {isDocumentExport && (
-            <Info>
-              Document rows: {csvStats.documentRowCount}. Tables found: {csvStats.tableCount}.
-              {' '}Table rows: {csvStats.rowCount}.
-            </Info>
-          )}
+          </Actions>
         </Card>
       )}
     </Wrapper>

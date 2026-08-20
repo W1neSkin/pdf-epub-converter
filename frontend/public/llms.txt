@@ -1,18 +1,23 @@
 # PDF to EPUB Converter
 
-Free web app: https://w1neskin.github.io/pdf-epub-converter/
+> Free web application for converting PDF files to fixed-layout EPUB, readable XLSX workbooks, and table-only CSV files.
 
-## What it is
-An online tool that converts a PDF file into an EPUB book. Users sign in, upload a PDF, wait for conversion, then download the EPUB or read it in the browser.
+Canonical URL: https://w1neskin.github.io/pdf-epub-converter/
 
-## Facts
-- Price: free. A free account is required.
-- Limits: 50MB file size, 50 pages on the free plan.
-- Output: EPUB with extracted text and images.
-- Library: signed-in users can store and reopen converted books.
-- Not a local business. No street address. Use it from any country in a browser.
+## Product
+- [PDF to EPUB Converter](https://w1neskin.github.io/pdf-epub-converter/): Open the free browser application.
+- [Features](https://w1neskin.github.io/pdf-epub-converter/features.html): EPUB, XLSX, CSV, library, reader, and file limits.
+- [How to use](https://w1neskin.github.io/pdf-epub-converter/how-to.html): Step-by-step conversion instructions and format guidance.
+- [Privacy](https://w1neskin.github.io/pdf-epub-converter/privacy.html): Account, document processing, storage, and analytics information.
 
-## How to use
-1. Open the site and create an account.
-2. Upload a PDF.
-3. Download the EPUB or read it on the site.
+## Project
+- [Source code](https://github.com/W1neSkin/pdf-epub-converter): Public application source and deployment configuration.
+- [Issue tracker](https://github.com/W1neSkin/pdf-epub-converter/issues): Technical questions and bug reports.
+
+## Verified facts
+- The current service is free and requires a free account for conversion.
+- The free limit is 50MB and 50 pages per PDF.
+- EPUB output preserves each PDF page as an image with selectable positioned text.
+- XLSX output creates one readable worksheet per PDF page.
+- Table exports include one combined CSV and a ZIP with one CSV per detected table.
+- Saved EPUB books can be reopened in the built-in browser reader.

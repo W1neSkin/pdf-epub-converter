@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { API_BASE_URL, AUTH_BASE_URL } from '../config';
-
-const Card = styled.div`
-  background: rgba(15, 23, 42, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 0.9rem;
-  padding: 1.2rem;
-`;
+import {
+  Panel as Card,
+  PrimaryAction as PrimaryButton,
+  SecondaryAction as GhostButton,
+} from './ui';
 
 const Title = styled.h2`
   font-size: 1.25rem;
+  margin-bottom: 0.35rem;
+`;
+
+const Intro = styled.p`
   margin-bottom: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+  line-height: 1.45;
 `;
 
 const Form = styled.form`
@@ -35,27 +40,6 @@ const Input = styled.input`
 const Row = styled.div`
   display: grid;
   gap: 0.4rem;
-`;
-
-const PrimaryButton = styled.button`
-  margin-top: 0.3rem;
-  border: none;
-  border-radius: 0.6rem;
-  background: #facc15;
-  color: #111827;
-  font-weight: 700;
-  min-height: 2.5rem;
-  cursor: pointer;
-`;
-
-const GhostButton = styled.button`
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 0.6rem;
-  background: transparent;
-  color: white;
-  min-height: 2.4rem;
-  cursor: pointer;
-  font-weight: 600;
 `;
 
 const Message = styled.div`
@@ -211,7 +195,12 @@ const AuthForm = ({ onAuthSuccess }) => {
 
   return (
     <Card>
-      <Title>{isLogin ? 'Login' : 'Create account'}</Title>
+      <Title>{isLogin ? 'Sign in' : 'Create account'}</Title>
+      <Intro>
+        {isLogin
+          ? 'Continue to the converter and your EPUB library.'
+          : 'Create a free account to convert and save EPUB books.'}
+      </Intro>
 
       {error && <Message $error>{error}</Message>}
       {success && <Message>{success}</Message>}
@@ -256,7 +245,7 @@ const AuthForm = ({ onAuthSuccess }) => {
         </Row>
 
         <PrimaryButton type="submit" disabled={loading}>
-          {loading ? 'Please wait...' : isLogin ? 'Login' : 'Create account'}
+          {loading ? 'Please wait...' : isLogin ? 'Sign in' : 'Create account'}
         </PrimaryButton>
         {loading && (
           <Hint>{loadingHint || 'Submitting your request...'}</Hint>
@@ -274,7 +263,7 @@ const AuthForm = ({ onAuthSuccess }) => {
             setFormData({ fullName: '', email: '', password: '' });
           }}
         >
-          {isLogin ? 'Need an account? Sign up' : 'Already registered? Login'}
+          {isLogin ? 'New here? Create an account' : 'Already registered? Sign in'}
         </GhostButton>
       </div>
     </Card>
