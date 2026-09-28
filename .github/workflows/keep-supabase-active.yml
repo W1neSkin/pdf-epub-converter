@@ -1,0 +1,38 @@
+name: Keep Supabase active
+
+# Free Supabase projects pause after about 7 days with too little database use.
+# A few real table reads each day are enough to stay on the free plan.
+on:
+  schedule:
+    - cron: "15 8 * * *"
+    - cron: "15 20 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Query the database
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send a few database requests
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -eu
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_KEY" ]; then
+            echo "Supabase secrets are missing"
+            exit 1
+          fi
+          base="${SUPABASE_URL%/}"
+          # Read two existing tables several times. Do not print rows or keys.
+          for _ in 1 2 3; do
+            for table in user_profiles user_books; do
+              curl -fsS \
+                -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+                -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \
+                "${base}/rest/v1/${table}?select=id&limit=1" \
+                -o /dev/null
+            done
+          done
+          echo "database_requests=6"
