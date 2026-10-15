@@ -18,7 +18,7 @@ def test_sitemap_pages_have_unique_metadata_and_canonicals():
         node.text
         for node in sitemap.findall("s:url/s:loc", namespace)
     ]
-    assert len(urls) == len(set(urls)) == 4
+    assert len(urls) == len(set(urls)) == 7
 
     titles = set()
     for url in urls:
@@ -59,6 +59,9 @@ def test_homepage_structured_data_and_llms_file_are_current():
     llms_text = (PUBLIC / "llms.txt").read_text(encoding="utf-8")
     assert llms_text.startswith("# PDF to EPUB Converter\n\n>")
     assert f"[Features]({SITE}features.html)" in llms_text
+    assert f"[Convert PDF to EPUB]({SITE}pdf-to-epub.html)" in llms_text
+    assert f"[Convert PDF to Excel]({SITE}pdf-to-excel.html)" in llms_text
+    assert f"[Extract PDF tables to CSV]({SITE}pdf-tables-to-csv.html)" in llms_text
 
 
 def test_user_facing_text_uses_regular_hyphens():

@@ -8,6 +8,9 @@ Canonical URL: https://w1neskin.github.io/pdf-epub-converter/
 - [PDF to EPUB Converter](https://w1neskin.github.io/pdf-epub-converter/): Open the free browser application.
 - [Features](https://w1neskin.github.io/pdf-epub-converter/features.html): EPUB, XLSX, CSV, library, reader, and file limits.
 - [How to use](https://w1neskin.github.io/pdf-epub-converter/how-to.html): Step-by-step conversion instructions and format guidance.
+- [Convert PDF to EPUB](https://w1neskin.github.io/pdf-epub-converter/pdf-to-epub.html): Fixed-layout EPUB with selectable text. Free limit: 50MB and 50 pages.
+- [Convert PDF to Excel](https://w1neskin.github.io/pdf-epub-converter/pdf-to-excel.html): XLSX workbook with one worksheet per PDF page.
+- [Extract PDF tables to CSV](https://w1neskin.github.io/pdf-epub-converter/pdf-tables-to-csv.html): One combined CSV or a ZIP with one CSV per table. OCR is available for scans.
 - [Privacy](https://w1neskin.github.io/pdf-epub-converter/privacy.html): Account, document processing, storage, and analytics information.
 
 ## Project

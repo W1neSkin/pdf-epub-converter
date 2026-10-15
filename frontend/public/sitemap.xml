@@ -2,21 +2,39 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://w1neskin.github.io/pdf-epub-converter/</loc>
-    <lastmod>2026-08-20</lastmod>
+    <lastmod>2026-10-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://w1neskin.github.io/pdf-epub-converter/features.html</loc>
-    <lastmod>2026-08-20</lastmod>
+    <lastmod>2026-10-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://w1neskin.github.io/pdf-epub-converter/how-to.html</loc>
-    <lastmod>2026-08-20</lastmod>
+    <lastmod>2026-10-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://w1neskin.github.io/pdf-epub-converter/pdf-to-epub.html</loc>
+    <lastmod>2026-10-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://w1neskin.github.io/pdf-epub-converter/pdf-to-excel.html</loc>
+    <lastmod>2026-10-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://w1neskin.github.io/pdf-epub-converter/pdf-tables-to-csv.html</loc>
+    <lastmod>2026-10-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
   </url>
   <url>
     <loc>https://w1neskin.github.io/pdf-epub-converter/privacy.html</loc>
