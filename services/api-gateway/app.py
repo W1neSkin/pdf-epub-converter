@@ -224,6 +224,8 @@ async def forward_request(
                     },
                     files=files,
                     data=data,
+                    # Keep ?output=excel when the file is sent as multipart.
+                    params=request.query_params,
                 )
             else:
                 # Handle JSON/other content
@@ -325,7 +327,18 @@ async def auth_proxy(path: str, request: Request):
     """Proxy requests to auth service"""
     return await forward_request("auth", f"/auth/{path}", request)
 
-# Converter routes require a logged-in user
+# Converter routes require a logged-in user, except the public conversion API.
+@app.api_route("/api/public/{path:path}", methods=["GET", "POST"])
+async def public_convert_proxy(path: str, request: Request):
+    """Proxy anonymous conversion, status, and download calls."""
+    return await forward_request(
+        "converter",
+        f"/api/public/{path}",
+        request,
+        timeout=settings.CONVERT_TIMEOUT,
+    )
+
+
 @app.api_route("/api/convert", methods=["POST"])
 async def convert_proxy(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     """Proxy PDF conversion requests to converter service"""

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, status, Request, Depends, BackgroundTasks
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, status, Request, Depends, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from PyPDF2 import PdfReader
 from conversion_jobs import read_status, run_conversion_job, write_status
 from table_extractor import run_table_extraction_job
 from plan_limits import limits_for
+from public_convert import allow_public_job, public_download_url
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -245,6 +246,118 @@ async def extract_pdf_tables_to_csv(
         status="processing",
     )
 
+
+@app.post("/api/public/convert", response_model=ConversionResponse)
+async def convert_without_account(
+    background_tasks: BackgroundTasks,
+    request: Request,
+    file: UploadFile = File(...),
+    output: str = Form("epub"),
+) -> ConversionResponse:
+    """Start a conversion without a user account. Nothing is saved to a library."""
+    allow_public_job(request)
+    # Form field is the normal way. A query value is accepted too.
+    selected = (request.query_params.get("output") or output or "epub").strip().lower()
+    if selected not in {"epub", "excel"}:
+        raise HTTPException(status_code=400, detail="output must be epub or excel")
+
+    conversion_id, pdf_path, page_count = prepare_uploaded_pdf(file)
+    output_dir = os.path.join(OUTPUT_FOLDER, conversion_id)
+    os.makedirs(output_dir, exist_ok=True)
+    write_status(
+        output_dir,
+        status="processing",
+        progress=10,
+        message="Upload received. Conversion queued...",
+        pages=page_count,
+        public=True,
+    )
+    filename = file.filename or "document.pdf"
+    if selected == "excel":
+        background_tasks.add_task(
+            run_table_extraction_job,
+            conversion_id,
+            pdf_path,
+            output_dir,
+            filename,
+        )
+    else:
+        background_tasks.add_task(
+            run_conversion_job,
+            conversion_id,
+            pdf_path,
+            output_dir,
+            filename,
+            {},
+            "",
+        )
+    logger.info("Queued public %s conversion %s", selected, conversion_id)
+    return ConversionResponse(
+        success=True,
+        conversion_id=conversion_id,
+        download_url=None,
+        pages=page_count,
+        total_words=0,
+        status="processing",
+    )
+
+
+def _require_public_job(conversion_id: str) -> tuple[str, str, Dict[str, Any]]:
+    """Load a job that was created without an account."""
+    conversion_id = require_conversion_id(conversion_id)
+    output_dir = os.path.join(OUTPUT_FOLDER, conversion_id)
+    job = read_status(output_dir)
+    if not job or not job.get("public"):
+        raise HTTPException(status_code=404, detail="Conversion not found")
+    return conversion_id, output_dir, job
+
+
+def _with_public_links(conversion_id: str, job: Dict[str, Any]) -> StatusResponse:
+    """Point completed downloads at the no-login download route."""
+    payload = _status_from_job(job)
+    if job.get("status") == "completed":
+        payload.download_url = public_download_url(conversion_id, "primary")
+        if job.get("tables_download_url"):
+            payload.tables_download_url = public_download_url(conversion_id, "tables")
+        if job.get("archive_download_url"):
+            payload.archive_download_url = public_download_url(conversion_id, "archive")
+    return payload
+
+
+def _status_from_job(job: Dict[str, Any]) -> StatusResponse:
+    return StatusResponse(
+        status=job.get("status", "processing"),
+        progress=job.get("progress"),
+        message=job.get("message"),
+        file_size=job.get("file_size"),
+        download_url=job.get("download_url"),
+        pages=job.get("pages"),
+        current_page=job.get("current_page"),
+        total_words=job.get("total_words"),
+        book_id=job.get("book_id"),
+        table_count=job.get("table_count"),
+        row_count=job.get("row_count"),
+        document_row_count=job.get("document_row_count"),
+        strategy_summary=job.get("strategy_summary"),
+        used_camelot=job.get("used_camelot"),
+        used_ocr=job.get("used_ocr"),
+        output_kind=job.get("output_kind"),
+        download_name=job.get("download_name"),
+        tables_download_url=job.get("tables_download_url"),
+        tables_download_name=job.get("tables_download_name"),
+        tables_size=job.get("tables_size"),
+        archive_download_url=job.get("archive_download_url"),
+        archive_download_name=job.get("archive_download_name"),
+        archive_size=job.get("archive_size"),
+    )
+
+
+@app.get("/api/public/status/{conversion_id}", response_model=StatusResponse)
+async def public_conversion_status(conversion_id: str) -> StatusResponse:
+    """Progress for a conversion that was started without an account."""
+    conversion_id, _output_dir, job = _require_public_job(conversion_id)
+    return _with_public_links(conversion_id, job)
+
 @app.get("/api/download/{conversion_id}")
 async def download_epub(
     conversion_id: str,
@@ -252,6 +365,18 @@ async def download_epub(
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Download the generated output file (EPUB or CSV)."""
+    return _download_job_file(conversion_id, kind)
+
+
+@app.get("/api/public/download/{conversion_id}")
+async def download_without_account(conversion_id: str, kind: str = "primary"):
+    """Download a result that was created without an account."""
+    _require_public_job(conversion_id)
+    return _download_job_file(conversion_id, kind)
+
+
+def _download_job_file(conversion_id: str, kind: str):
+    """Send one generated file. kind selects the Excel workbook, CSV, or ZIP."""
     conversion_id = require_conversion_id(conversion_id)
     output_dir = os.path.join(OUTPUT_FOLDER, conversion_id)
     job = read_status(output_dir) or {}
@@ -288,6 +413,8 @@ async def download_epub(
             media_type = "application/epub+zip"
         elif output_filename.lower().endswith(".zip"):
             media_type = "application/zip"
+        elif output_filename.lower().endswith(".xlsx"):
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else:
             media_type = "text/csv"
 
@@ -309,31 +436,7 @@ async def get_conversion_status(
     job = read_status(output_dir)
     if not job:
         raise HTTPException(status_code=404, detail="Conversion not found")
-    return StatusResponse(
-        status=job.get("status", "processing"),
-        progress=job.get("progress"),
-        message=job.get("message"),
-        file_size=job.get("file_size"),
-        download_url=job.get("download_url"),
-        pages=job.get("pages"),
-        current_page=job.get("current_page"),
-        total_words=job.get("total_words"),
-        book_id=job.get("book_id"),
-        table_count=job.get("table_count"),
-        row_count=job.get("row_count"),
-        document_row_count=job.get("document_row_count"),
-        strategy_summary=job.get("strategy_summary"),
-        used_camelot=job.get("used_camelot"),
-        used_ocr=job.get("used_ocr"),
-        output_kind=job.get("output_kind"),
-        download_name=job.get("download_name"),
-        tables_download_url=job.get("tables_download_url"),
-        tables_download_name=job.get("tables_download_name"),
-        tables_size=job.get("tables_size"),
-        archive_download_url=job.get("archive_download_url"),
-        archive_download_name=job.get("archive_download_name"),
-        archive_size=job.get("archive_size"),
-    )
+    return _status_from_job(job)
 
 if __name__ == '__main__':
     import uvicorn

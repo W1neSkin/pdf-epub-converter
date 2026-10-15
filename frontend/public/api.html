@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="index, follow, max-snippet:-1" />
+    <title>PDF Conversion API without an Account</title>
+    <meta
+      name="description"
+      content="Convert a PDF to EPUB or Excel without signing in. POST the file to the public API, poll status, then download the result. Free limit: 50MB, 50 pages, 8 jobs per hour."
+    />
+    <link rel="canonical" href="https://w1neskin.github.io/pdf-epub-converter/api.html" />
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./seo.css" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [{
+        "@type": "Question",
+        "name": "How do I convert a PDF without signing in?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "POST the PDF to https://pdf-converter-api-gateway.onrender.com/api/public/convert with form field output set to epub or excel. Poll /api/public/status/{conversion_id} until status is completed, then download /api/public/download/{conversion_id}. No account is required. The free limit is 50MB, 50 pages, and 8 conversions per address per hour. Results are not saved to a library."
+        }
+      }]
+    }
+    </script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./">PDF to EPUB Converter</a>
+      <nav aria-label="Project pages">
+        <a href="./features.html">Features</a>
+        <a href="./how-to.html">How to use</a>
+        <a href="./privacy.html">Privacy</a>
+      </nav>
+    </header>
+    <main>
+      <h1>How do I convert a PDF without signing in?</h1>
+      <p>
+        Send the PDF to the public conversion API. No account and no token are
+        required. The same free limits apply: 50MB and 50 pages. One address
+        can start 8 conversions per hour. The result is not saved to a library.
+      </p>
+      <p>
+        Base URL: <code>https://pdf-converter-api-gateway.onrender.com</code>.
+        The first call can take about a minute while the free server wakes up.
+      </p>
+
+      <section class="card">
+        <h2>1. Start a conversion</h2>
+        <p>
+          <code>POST /api/public/convert</code> with a multipart file field
+          named <code>file</code>. Optional form field <code>output</code> is
+          <code>epub</code> (default) or <code>excel</code>. Excel returns an
+          XLSX workbook, plus CSV and ZIP downloads when tables are found.
+        </p>
+        <pre>curl -F "file=@document.pdf" -F "output=epub" \
+  https://pdf-converter-api-gateway.onrender.com/api/public/convert</pre>
+        <p>
+          The response includes <code>conversion_id</code> and
+          <code>status: processing</code>.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>2. Wait for the result</h2>
+        <p>
+          <code>GET /api/public/status/{conversion_id}</code> until
+          <code>status</code> is <code>completed</code>. A completed EPUB
+          response includes <code>download_url</code>. A completed Excel
+          response can also include <code>tables_download_url</code> and
+          <code>archive_download_url</code>.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>3. Download the file</h2>
+        <p>
+          <code>GET /api/public/download/{conversion_id}</code> returns the
+          EPUB or XLSX. Add <code>?kind=tables</code> for the combined CSV or
+          <code>?kind=archive</code> for the ZIP of separate tables. These
+          links work only for jobs created by the public API.
+        </p>
+      </section>
+
+      <p>
+        Related:
+        <a href="./pdf-to-epub.html">PDF to EPUB</a>,
+        <a href="./pdf-to-excel.html">PDF to Excel</a>.
+      </p>
+      <a class="button" href="./">Open the converter</a>
+    </main>
+    <footer>
+      <a href="./features.html">All features</a>
+    </footer>
+  </body>
+</html>

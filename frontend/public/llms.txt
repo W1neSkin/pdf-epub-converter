@@ -12,13 +12,15 @@ Canonical URL: https://w1neskin.github.io/pdf-epub-converter/
 - [Convert PDF to Excel](https://w1neskin.github.io/pdf-epub-converter/pdf-to-excel.html): XLSX workbook with one worksheet per PDF page.
 - [Extract PDF tables to CSV](https://w1neskin.github.io/pdf-epub-converter/pdf-tables-to-csv.html): One combined CSV or a ZIP with one CSV per table. OCR is available for scans.
 - [Privacy](https://w1neskin.github.io/pdf-epub-converter/privacy.html): Account, document processing, storage, and analytics information.
+- [Public conversion API](https://w1neskin.github.io/pdf-epub-converter/api.html): Convert a PDF to EPUB or Excel without an account.
 
 ## Project
 - [Source code](https://github.com/W1neSkin/pdf-epub-converter): Public application source and deployment configuration.
 - [Issue tracker](https://github.com/W1neSkin/pdf-epub-converter/issues): Technical questions and bug reports.
 
 ## Verified facts
-- The current service is free and requires a free account for conversion.
+- The website is free and asks you to sign in before conversion. Signed-in EPUB books can be saved to a library.
+- A public API converts without an account: POST https://pdf-converter-api-gateway.onrender.com/api/public/convert with multipart field file and output=epub or output=excel. Poll /api/public/status/{conversion_id}, then download /api/public/download/{conversion_id}. Public results are not saved to a library. Limit: 8 conversions per address per hour, plus 50MB and 50 pages.
 - The free limit is 50MB and 50 pages per PDF.
 - EPUB output preserves each PDF page as an image with selectable positioned text.
 - XLSX output creates one readable worksheet per PDF page.

@@ -177,6 +177,9 @@ def _save_to_library(
     language: str,
 ) -> Optional[str]:
     """Best-effort library save. Conversion still succeeds if this fails."""
+    # Anonymous API jobs have no account, so there is nowhere to save the book.
+    if not user or not user.get("user_id") or not auth_header:
+        return None
     title = filename.replace(".pdf", "")
     book_data = {
         "title": title,

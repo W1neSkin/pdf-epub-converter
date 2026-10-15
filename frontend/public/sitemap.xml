@@ -37,6 +37,12 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://w1neskin.github.io/pdf-epub-converter/api.html</loc>
+    <lastmod>2026-10-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://w1neskin.github.io/pdf-epub-converter/privacy.html</loc>
     <lastmod>2026-08-20</lastmod>
     <changefreq>yearly</changefreq>
