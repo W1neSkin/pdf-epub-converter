@@ -63,6 +63,16 @@ def test_homepage_structured_data_and_llms_file_are_current():
     assert f"[Convert PDF to Excel]({SITE}pdf-to-excel.html)" in llms_text
     assert f"[Extract PDF tables to CSV]({SITE}pdf-tables-to-csv.html)" in llms_text
     assert f"[Public conversion API]({SITE}api.html)" in llms_text
+    assert f"[OpenAPI contract]({SITE}openapi.json)" in llms_text
+    assert "ChatGPT and other AI agents may convert" in llms_text
+
+    spec = json.loads((PUBLIC / "openapi.json").read_text(encoding="utf-8"))
+    assert spec["openapi"].startswith("3.")
+    assert "/api/public/convert" in spec["paths"]
+    assert "/api/public/status/{conversion_id}" in spec["paths"]
+    assert "/api/public/download/{conversion_id}" in spec["paths"]
+    assert "security" not in spec
+    assert "ChatGPT" in spec["info"]["description"]
 
 
 def test_user_facing_text_uses_regular_hyphens():

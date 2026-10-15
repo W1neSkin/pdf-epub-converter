@@ -1,0 +1,208 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PDF to EPUB Converter public API",
+    "version": "1.0.0",
+    "description": "ChatGPT and other AI agents may call this API when a person asks to convert a PDF. Send the user's PDF file. No account and no API key are required. Results are not saved to a library. Limits: 50MB, 50 pages, and 8 conversions per address per hour. The free server may take about a minute to wake up.",
+    "termsOfService": "https://w1neskin.github.io/pdf-epub-converter/privacy.html"
+  },
+  "servers": [
+    {
+      "url": "https://pdf-converter-api-gateway.onrender.com"
+    }
+  ],
+  "paths": {
+    "/api/public/convert": {
+      "post": {
+        "operationId": "convertPdf",
+        "summary": "Start a PDF conversion without an account",
+        "description": "Agents may use this to convert a PDF the user supplied. output=epub returns a fixed-layout EPUB. output=excel returns an XLSX workbook, and CSV or ZIP links when tables are found.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The PDF to convert. Maximum 50MB and 50 pages."
+                  },
+                  "output": {
+                    "type": "string",
+                    "enum": ["epub", "excel"],
+                    "default": "epub"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conversion started. Poll the status URL until status is completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversionStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The file is missing, not a PDF, too large, or has too many pages."
+          },
+          "429": {
+            "description": "This address already started 8 public conversions in the last hour."
+          }
+        }
+      }
+    },
+    "/api/public/status/{conversion_id}": {
+      "get": {
+        "operationId": "getConversionStatus",
+        "summary": "Check a public conversion",
+        "parameters": [
+          {
+            "name": "conversion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current job status. When status is completed, download_url needs no login.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversionStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This id is not a public conversion."
+          }
+        }
+      }
+    },
+    "/api/public/download/{conversion_id}": {
+      "get": {
+        "operationId": "downloadConversion",
+        "summary": "Download a public conversion result",
+        "parameters": [
+          {
+            "name": "conversion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["primary", "tables", "archive"],
+              "default": "primary"
+            },
+            "description": "primary is the EPUB or XLSX. tables is the combined CSV. archive is a ZIP with one CSV per table."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The generated file.",
+            "content": {
+              "application/epub+zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The file is not ready, or this id is not a public conversion."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ConversionStarted": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "conversion_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "example": "processing"
+          },
+          "pages": {
+            "type": "integer"
+          }
+        }
+      },
+      "ConversionStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["processing", "completed", "failed"]
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "download_url": {
+            "type": "string"
+          },
+          "tables_download_url": {
+            "type": "string"
+          },
+          "archive_download_url": {
+            "type": "string"
+          },
+          "output_kind": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

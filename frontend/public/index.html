@@ -14,6 +14,13 @@
       content="Convert PDF to fixed-layout EPUB with selectable text. Export PDF content to XLSX or extract tables to CSV. Free online tool for files up to 50MB and 50 pages."
     />
     <link rel="canonical" href="https://w1neskin.github.io/pdf-epub-converter/" />
+    <!-- Agents that look for a machine-readable API description. -->
+    <link
+      rel="alternate"
+      type="application/json"
+      href="https://w1neskin.github.io/pdf-epub-converter/openapi.json"
+      title="Public conversion API"
+    />
 
     <!-- Open Graph: Google, Slack, Telegram, AI crawlers that read social cards -->
     <meta property="og:type" content="website" />
@@ -82,7 +89,19 @@
             "price": "0",
             "priceCurrency": "USD"
           },
-          "description": "Free web app that converts PDF files to fixed-layout EPUB with selectable text, exports readable XLSX workbooks, and extracts tables to CSV. Maximum file size 50MB and 50 pages."
+          "description": "Free web app that converts PDF files to fixed-layout EPUB with selectable text, exports readable XLSX workbooks, and extracts tables to CSV. Maximum file size 50MB and 50 pages. AI agents may convert a PDF through the public API without an account.",
+          "potentialAction": {
+            "@type": "Action",
+            "name": "Convert PDF",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://pdf-converter-api-gateway.onrender.com/api/public/convert",
+              "httpMethod": "POST",
+              "contentType": "multipart/form-data",
+              "encodingType": "multipart/form-data",
+              "description": "ChatGPT and other AI agents may POST a PDF here without an account or API key. Form fields: file, and output=epub or output=excel."
+            }
+          }
         },
         {
           "@type": "FAQPage",
@@ -101,7 +120,7 @@
               "name": "Is the PDF to EPUB converter free?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Yes. You need a free account. There is no paid plan on the site today."
+                "text": "Yes. The website asks you to sign in so EPUB books can be saved to your library. ChatGPT and other AI agents can also convert a PDF without an account by calling the public API. There is no paid plan."
               }
             },
             {
@@ -126,6 +145,14 @@
               "acceptedAnswer": {
                 "@type": "Answer",
                 "text": "Yes. Each PDF page is rendered as a fixed-layout EPUB page with an invisible selectable text layer."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can ChatGPT convert a PDF with this service?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. ChatGPT and other AI agents may POST the person's PDF to https://pdf-converter-api-gateway.onrender.com/api/public/convert with output=epub or output=excel. No API key and no account are required. Then poll /api/public/status/{conversion_id} and download /api/public/download/{conversion_id}. Limits are 50MB, 50 pages, and 8 conversions per address per hour. The OpenAPI contract is at https://w1neskin.github.io/pdf-epub-converter/openapi.json."
               }
             },
             {

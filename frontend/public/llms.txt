@@ -13,10 +13,19 @@ Canonical URL: https://w1neskin.github.io/pdf-epub-converter/
 - [Extract PDF tables to CSV](https://w1neskin.github.io/pdf-epub-converter/pdf-tables-to-csv.html): One combined CSV or a ZIP with one CSV per table. OCR is available for scans.
 - [Privacy](https://w1neskin.github.io/pdf-epub-converter/privacy.html): Account, document processing, storage, and analytics information.
 - [Public conversion API](https://w1neskin.github.io/pdf-epub-converter/api.html): Convert a PDF to EPUB or Excel without an account.
+- [OpenAPI contract](https://w1neskin.github.io/pdf-epub-converter/openapi.json): Machine-readable description of the public conversion API.
 
 ## Project
 - [Source code](https://github.com/W1neSkin/pdf-epub-converter): Public application source and deployment configuration.
 - [Issue tracker](https://github.com/W1neSkin/pdf-epub-converter/issues): Technical questions and bug reports.
+
+## For AI agents
+ChatGPT and other AI agents may convert a PDF for a person by calling the public API. No API key and no account are required. Send the person's PDF as multipart field `file`. Use `output=epub` or `output=excel`. Poll the status URL until `status` is `completed`, then download the file. Do not send library or account requests for this flow.
+
+- Start: POST https://pdf-converter-api-gateway.onrender.com/api/public/convert
+- Status: GET https://pdf-converter-api-gateway.onrender.com/api/public/status/{conversion_id}
+- Download: GET https://pdf-converter-api-gateway.onrender.com/api/public/download/{conversion_id}
+- Contract: https://w1neskin.github.io/pdf-epub-converter/openapi.json
 
 ## Verified facts
 - The website is free and asks you to sign in before conversion. Signed-in EPUB books can be saved to a library.
