@@ -81,7 +81,9 @@ const AuthForm = ({ onAuthSuccess }) => {
   const submit = async (event) => {
     event.preventDefault();
     setLoading(true);
-    setLoadingHint('');
+    // Show this before the first request. Reloading aborts the request that
+    // Render uses to boot a free service, so the next try starts from zero.
+    setLoadingHint('Leave this page open. If the free server was asleep, starting it can take a minute.');
     setError('');
     setSuccess('');
 
@@ -94,13 +96,14 @@ const AuthForm = ({ onAuthSuccess }) => {
       const retryableStatuses = new Set([429, 502, 503, 504]);
       const baseUrls = Array.from(new Set([AUTH_BASE_URL, API_BASE_URL]));
       let response = null;
-      const attemptsPerBase = 2;
+      // A free Render service often needs about a minute. Two short tries are not enough.
+      const attemptsPerBase = 3;
 
       for (let baseIndex = 0; baseIndex < baseUrls.length; baseIndex += 1) {
         const baseUrl = baseUrls[baseIndex];
         for (let attempt = 1; attempt <= attemptsPerBase; attempt += 1) {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 45000);
+          const timeoutId = setTimeout(() => controller.abort(), 90000);
           try {
             response = await fetch(`${baseUrl}${endpoint}`, {
               method: 'POST',
@@ -112,7 +115,7 @@ const AuthForm = ({ onAuthSuccess }) => {
             clearTimeout(timeoutId);
             const canRetry = attempt < attemptsPerBase;
             if (canRetry) {
-              setLoadingHint('Auth service is waking up. This can take 20-40 seconds...');
+              setLoadingHint('Still starting. Leave this page open.');
               await wait(6000);
               continue;
             }
@@ -125,7 +128,7 @@ const AuthForm = ({ onAuthSuccess }) => {
             break;
           }
           if (retryableStatuses.has(response.status) && attempt < attemptsPerBase) {
-            setLoadingHint('Auth service is waking up. This can take 20-40 seconds...');
+            setLoadingHint('Still starting. Leave this page open.');
             await wait(6000);
             continue;
           }
@@ -153,13 +156,13 @@ const AuthForm = ({ onAuthSuccess }) => {
         result = text ? JSON.parse(text) : {};
       } catch (parseError) {
         if (!response.ok && response.status === 429) {
-          throw new Error('Auth service is still waking up. Please wait 30-60 seconds and try again.');
+          throw new Error('Auth service is still starting. Press the button once and leave this page open.');
         }
         throw new Error(`Server error ${response.status}`);
       }
 
       if (!response.ok && response.status === 429) {
-        throw new Error('Auth service is still waking up. Please wait 30-60 seconds and try again.');
+        throw new Error('Auth service is still starting. Press the button once and leave this page open.');
       }
 
       if (!result.success) {
@@ -183,7 +186,7 @@ const AuthForm = ({ onAuthSuccess }) => {
       }
     } catch (submitError) {
       if (submitError.name === 'AbortError') {
-        setError('Auth service took too long to respond. Please try again in 20-40 seconds.');
+        setError('Auth service took too long to respond. Press the button once and leave this page open.');
       } else {
         setError(submitError.message || 'Network error');
       }

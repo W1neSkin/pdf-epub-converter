@@ -47,11 +47,12 @@ jobs:
         CI: false
         GENERATE_SOURCEMAP: false
         ESLINT_NO_DEV_ERRORS: true
-        # Set one BACKEND_URL repository variable after moving providers.
-        # Until then, these fallbacks preserve the current deployment.
+        # Library and account routes stay on the gateway.
         REACT_APP_API_URL: ${{ vars.BACKEND_URL || 'https://pdf-converter-api-gateway.onrender.com' }}
-        REACT_APP_AUTH_URL: ${{ vars.BACKEND_URL || 'https://pdf-converter-auth-service.onrender.com' }}
-        REACT_APP_CONVERTER_URL: ${{ vars.BACKEND_URL || 'https://pdf-epub-converter-api.onrender.com' }}
+        # Login and conversion must call the sleeping service directly.
+        # The gateway is usually already awake and gives up before that service finishes booting.
+        REACT_APP_AUTH_URL: https://pdf-converter-auth-service.onrender.com
+        REACT_APP_CONVERTER_URL: https://pdf-epub-converter-api.onrender.com
         
     - name: Setup Pages
       uses: actions/configure-pages@v4
