@@ -1,25 +1,26 @@
-# Use Python 3.12 as base image
+# EPUB is written by PDFCalque. Poppler remains for vector-only pages.
+FROM rust:1-bookworm AS pdfcalque
+WORKDIR /src
+COPY pdfcalque /src
+RUN cargo build --release --bin pdfcalque
+
 FROM python:3.12-slim
 
-# Install system dependencies for PDF processing
 RUN apt-get update && apt-get install -y \
     poppler-utils \
     tesseract-ocr \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy Python requirements and install dependencies
+COPY --from=pdfcalque /src/target/release/pdfcalque /usr/local/bin/pdfcalque
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all backend files
 COPY . .
 
-# Expose port 8000 for FastAPI
 EXPOSE 8000
 
-# Run FastAPI server
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

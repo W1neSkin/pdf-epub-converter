@@ -14,6 +14,7 @@ import httpx
 from alternative_parser import AlternativePDFParser
 from epub_generator import EPUBGenerator
 from html_generator import HTMLPageGenerator
+from pdfcalque_bridge import prefer_pdfcalque_pages, read_report
 from storage import storage
 
 logger = logging.getLogger(__name__)
@@ -83,27 +84,44 @@ def run_conversion_job(
             )
 
         report(8, "Reading the PDF...")
-        processor = AlternativePDFParser()
-        results = processor.parse_pdf(pdf_path, output_dir, on_progress=report)
-
-        pages_data = results.get("pages", [])
-        page_count = len(pages_data)
-        report(55, "Building EPUB pages...", pages=page_count)
-        html_generator = HTMLPageGenerator()
-        html_files = html_generator.generate_html_pages(pages_data=pages_data, output_dir=output_dir)
-        if not html_files:
-            raise Exception("No pages generated from PDF")
-
-        report(80, "Packaging EPUB...", pages=page_count)
         epub_path = os.path.join(output_dir, f"{conversion_id}.epub")
-        language = _detect_language(results.get("total_text", ""))
-        EPUBGenerator().generate_epub(
-            html_dir=output_dir,
-            image_dir=output_dir,
-            output_filename=epub_path,
-            title=f"Converted PDF - {filename}",
-            language=language,
+        # PDFCalque keeps the PDF text, fonts and the scan picture.
+        # Poppler remains for pages that are mostly vector drawings.
+        pdfcalque_report = read_report(pdf_path, epub_path)
+        use_pdfcalque = (
+            bool(pdfcalque_report)
+            and prefer_pdfcalque_pages(pdfcalque_report)
+            and os.path.isfile(epub_path)
         )
+        if use_pdfcalque:
+            page_count = int(pdfcalque_report.get("pages") or 0)
+            total_words = int(pdfcalque_report.get("words") or 0)
+            language = str(pdfcalque_report.get("language") or "").strip() or "en"
+            report(80, "Packaging EPUB...", pages=page_count)
+        else:
+            if os.path.isfile(epub_path):
+                os.remove(epub_path)
+            processor = AlternativePDFParser()
+            results = processor.parse_pdf(pdf_path, output_dir, on_progress=report)
+
+            pages_data = results.get("pages", [])
+            page_count = len(pages_data)
+            report(55, "Building EPUB pages...", pages=page_count)
+            html_generator = HTMLPageGenerator()
+            html_files = html_generator.generate_html_pages(pages_data=pages_data, output_dir=output_dir)
+            if not html_files:
+                raise Exception("No pages generated from PDF")
+
+            report(80, "Packaging EPUB...", pages=page_count)
+            language = _detect_language(results.get("total_text", ""))
+            total_words = results.get("total_words", 0)
+            EPUBGenerator().generate_epub(
+                html_dir=output_dir,
+                image_dir=output_dir,
+                output_filename=epub_path,
+                title=f"Converted PDF - {filename}",
+                language=language,
+            )
 
         report(90, "Saving EPUB...", pages=page_count)
         upload_result = storage.upload_epub(epub_path, conversion_id)
@@ -118,7 +136,6 @@ def run_conversion_job(
             download_url = f"{gateway}/api/download/{conversion_id}"
             logger.warning("Cloudinary upload failed, using local fallback")
 
-        total_words = results.get("total_words", 0)
         book_id = _save_to_library(
             filename=filename,
             file_size=os.path.getsize(epub_path),

@@ -77,4 +77,8 @@ logs/
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+
+# PDFCalque is compiled during deploy. Do not keep the build output.
+backend/pdfcalque/target/
+backend/bin/ 

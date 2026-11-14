@@ -119,7 +119,19 @@ function resolveZipPath(opfBasePath, pageHref, assetHref) {
   return parts.join('/');
 }
 
-const PageViewer = ({ pages, currentPageIndex, epubData }) => {
+function pagePixels(value) {
+  const size = Number.parseFloat(value);
+  if (!size) {
+    return 0;
+  }
+  // PDFCalque stores the page size in CSS points. The viewer measures pixels.
+  if (String(value).trim().endsWith('pt')) {
+    return size * (96 / 72);
+  }
+  return size;
+}
+
+const PageViewer = ({ pages, currentPageIndex, epubData, anchor }) => {
   const [processedContent, setProcessedContent] = useState('');
   const [isFixedLayout, setIsFixedLayout] = useState(false);
   const [fixedPageSize, setFixedPageSize] = useState({ width: 0, height: 0 });
@@ -145,16 +157,27 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
       const doc = parser.parseFromString(page.content, 'text/html');
       const bodyNode = doc.body || doc.documentElement;
       const fixedPage = bodyNode.querySelector('.fixed-layout-page');
-      const fixedLayoutDetected = Boolean(fixedPage);
+      const svg = bodyNode.querySelector('svg');
+      let width = 0;
+      let height = 0;
+      let fixedLayoutDetected = Boolean(fixedPage);
+      if (fixedPage) {
+        width = Number.parseFloat(fixedPage.style.width) || 0;
+        height = Number.parseFloat(fixedPage.style.height) || 0;
+      } else if (svg) {
+        width = pagePixels(svg.getAttribute('width'));
+        height = pagePixels(svg.getAttribute('height'));
+        if (width && height) {
+          fixedLayoutDetected = true;
+          svg.setAttribute('width', String(width));
+          svg.setAttribute('height', String(height));
+          svg.style.display = 'block';
+          svg.style.width = `${width}px`;
+          svg.style.height = `${height}px`;
+        }
+      }
       setIsFixedLayout(fixedLayoutDetected);
-      setFixedPageSize(
-        fixedPage
-          ? {
-              width: Number.parseFloat(fixedPage.style.width) || 0,
-              height: Number.parseFloat(fixedPage.style.height) || 0,
-            }
-          : { width: 0, height: 0 }
-      );
+      setFixedPageSize({ width, height });
 
       if (epubData && epubData.zip) {
         const images = bodyNode.querySelectorAll('img');
@@ -183,9 +206,6 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
         : '';
       setProcessedContent(`${cssBlock}${bodyNode.innerHTML}`);
 
-      if (containerRef.current) {
-        containerRef.current.scrollTop = 0;
-      }
     } catch (error) {
       console.error('Error processing page content:', error);
       setProcessedContent('<div>Error loading page content</div>');
@@ -198,6 +218,20 @@ const PageViewer = ({ pages, currentPageIndex, epubData }) => {
       processPageContent(pages[currentPageIndex]);
     }
   }, [pages, currentPageIndex, processPageContent]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const safe = String(anchor || '').replace(/[^A-Za-z0-9_-]/g, '');
+    const node = safe ? container.querySelector(`#${safe}`) : null;
+    if (node && node.scrollIntoView) {
+      node.scrollIntoView({ block: 'start' });
+      return;
+    }
+    container.scrollTop = 0;
+  }, [processedContent, anchor]);
 
   useEffect(() => {
     return () => cleanupObjectUrls();
