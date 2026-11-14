@@ -1,6 +1,11 @@
+# Railway builds from the repository root.
+FROM rust:1-bookworm AS pdfcalque
+WORKDIR /src
+COPY backend/pdfcalque /src
+RUN cargo build --release --bin pdfcalque
+
 FROM python:3.12-slim
 
-# Converter needs Poppler for PDF rendering and Tesseract for OCR fallback.
 RUN apt-get update && apt-get install -y \
     poppler-utils \
     tesseract-ocr \
@@ -9,10 +14,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Railway builds from the repository root, unlike the local backend image.
+COPY --from=pdfcalque /src/target/release/pdfcalque /usr/local/bin/pdfcalque
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
 COPY backend/ .
 
 EXPOSE 8000

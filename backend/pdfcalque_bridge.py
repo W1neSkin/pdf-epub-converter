@@ -20,10 +20,14 @@ def binary():
     found = shutil.which("pdfcalque") or shutil.which("pdfcalque.exe")
     if found:
         return found
-    # Local checkout sits next to this repository: ../PDFCalque/target/release
-    root = Path(__file__).resolve().parents[2]
+    here = Path(__file__).resolve().parent
+    # bin/ is produced by build.sh. The sibling checkout is the local dev build.
+    checkout = here.parents[1] / "PDFCalque" / "target" / "release"
+    candidates = []
     for name in ("pdfcalque.exe", "pdfcalque"):
-        candidate = root / "PDFCalque" / "target" / "release" / name
+        candidates.append(here / "bin" / name)
+        candidates.append(checkout / name)
+    for candidate in candidates:
         if candidate.is_file():
             return str(candidate)
     return None
