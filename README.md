@@ -2,9 +2,11 @@
 
 [![Deploy React App to GitHub Pages](https://github.com/W1neSkin/pdf-epub-converter/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/W1neSkin/pdf-epub-converter/actions/workflows/deploy-pages.yml)
 
-Open-source web application for converting PDF documents into fixed-layout EPUB books, readable Excel workbooks and table-only CSV files.
+Web application that turns a PDF into a fixed-layout EPUB, an Excel workbook, and CSV files for the tables it finds.
 
-The EPUB output preserves every PDF page as an image and adds a precisely positioned, selectable text layer. The spreadsheet workflow extracts document content into XLSX and exports detected tables as combined or separate CSV files.
+Text and scans are converted with [PDFCalque](https://github.com/W1neSkin/PDFCalque). PDFCalque reads the PDF itself: real letters, positions, embedded fonts, and the bookmark tree. A scan stays the picture already stored in the file. Pages that are mostly vector drawings still go through Poppler, because PDFCalque does not paint shadings and blends. If the PDFCalque program is missing, the older Poppler pipeline is used for the whole EPUB.
+
+Tables are extracted twice. PDFCalque looks for a drawn grid and for short words lined up in columns. pdfplumber, Camelot, and Tesseract look as well. Each page keeps the result with the better cells. Long prose in two columns is not stored as a table. A scan that has no text layer can still reach the Tesseract fallback.
 
 **Live application:** https://w1neskin.github.io/pdf-epub-converter/
 
@@ -12,11 +14,12 @@ The EPUB output preserves every PDF page as an image and adds a precisely positi
 
 ### EPUB book
 
-- Fixed-layout EPUB 3 output
-- Original PDF page appearance
-- Selectable and copyable text
-- Precise selection inside table cells
-- Built-in responsive EPUB reader
+- Fixed-layout EPUB 3
+- Text, fonts, and pictures taken from the PDF when PDFCalque handles the file
+- Bookmark tree as the table of contents, including the place on the page
+- Original scan image when the page has no text layer
+- Poppler page image for vector-only artwork
+- Built-in reader that shows the page, the embedded fonts, and the outline
 - Personal EPUB library
 
 ### Excel and table files
@@ -25,21 +28,20 @@ The EPUB output preserves every PDF page as an image and adds a precisely positi
 - Text and detected tables in the same workbook
 - Combined CSV containing all detected tables
 - ZIP archive with one CSV file per table
-- OCR fallback for scanned documents
+- OCR fallback for scanned pages that have no text layer
 
 ## Main features
 
 - Local PDF preview before conversion starts
 - Drag-and-drop and standard file selection
-- PDF metadata, page count and size validation
-- Two clear workflows: EPUB or Excel with tables
-- `pdfplumber`, Camelot and Tesseract OCR table extraction
-- Fixed-layout page images generated with Poppler
-- Invisible text overlay with character coordinates
+- PDF metadata, page count, and size validation
+- Two workflows: EPUB, or Excel with tables
+- PDFCalque for text, fonts, scans, and aligned tables
+- pdfplumber, Camelot, and Tesseract when they produce the better table
 - Authentication with JWT and Supabase
 - Cloudinary storage for saved EPUB books
 - Searchable library with list and grid views
-- Desktop and mobile responsive interface
+- Desktop and mobile layout
 
 ## How to use
 
@@ -50,7 +52,7 @@ The EPUB output preserves every PDF page as an image and adds a precisely positi
 5. Start conversion and wait for processing.
 6. Download the result or open the EPUB in the built-in reader.
 
-The current free service accepts PDF files up to **50 MB** and **50 pages**.
+The free service accepts PDF files up to **50 MB** and **50 pages**.
 
 ## Technology
 
@@ -65,12 +67,12 @@ The current free service accepts PDF files up to **50 MB** and **50 pages**.
 ### Backend
 
 - Python and FastAPI
+- PDFCalque, the Rust library in `backend/pdfcalque`
 - pdfplumber and PyPDF2
-- pdf2image and Poppler
-- Camelot
-- Tesseract OCR
+- pdf2image and Poppler, used when PDFCalque is not the better page
+- Camelot and Tesseract OCR for tables
 - openpyxl
-- Railway
+- Render
 
 ### Data and storage
 
@@ -94,7 +96,9 @@ Auth      Converter   Library
          Cloudinary
 ```
 
-The converter renders PDF pages, extracts positioned text, creates fixed-layout XHTML and packages the result as EPUB 3. The table workflow orders extracted text and tables before generating XLSX, CSV and ZIP outputs.
+The converter calls `pdfcalque export` for an EPUB and `pdfcalque tables` when it is scoring tables. The report says how much text, how many full-page images, and how many paths the PDF contains. That report chooses PDFCalque or Poppler for the book. Table rows from both engines are scored, and the stronger cells are written to Excel and CSV.
+
+Deploy compiles PDFCalque from `backend/pdfcalque` (`backend/build.sh`, or the Dockerfiles). The program is also found in `PDFCALQUE_BIN`, on `PATH`, or in a sibling `PDFCalque/target/release` checkout.
 
 ## Local development
 
@@ -113,10 +117,17 @@ npm install
 npm start
 ```
 
-For the complete microservices environment, configure the required Supabase, Cloudinary and JWT variables, then run:
+For the complete microservices environment, configure the required Supabase, Cloudinary, and JWT variables, then run:
 
 ```bash
 docker compose -f docker-compose.microservices.yml up --build
+```
+
+The image build compiles PDFCalque. To point the Python process at a binary you built yourself, build it in the PDFCalque repo and set `PDFCALQUE_BIN` to that program:
+
+```bash
+cargo build --release --bin pdfcalque
+export PDFCALQUE_BIN=/path/to/pdfcalque
 ```
 
 See [environment setup](docs/environment-setup.md) and the [microservices guide](docs/MICROSERVICES_SETUP.md) for configuration details.
@@ -149,4 +160,4 @@ python -m pytest tests
 
 ## Contributing
 
-Bug reports, feature requests, documentation improvements and pull requests are welcome through [GitHub Issues](https://github.com/W1neSkin/pdf-epub-converter/issues).
+Bug reports, feature requests, documentation improvements, and pull requests are welcome through [GitHub Issues](https://github.com/W1neSkin/pdf-epub-converter/issues).
