@@ -1,7 +1,9 @@
 # Use Python 3.12 as base image
 FROM python:3.12-slim
 
-# Install system dependencies for PDF processing
+# Poppler renders vector-only pages. Tesseract reads tables on scans.
+# PDFCalque, when /usr/local/bin/pdfcalque or PDFCALQUE_BIN is present,
+# writes the EPUB for text and scans and may win the table comparison.
 RUN apt-get update && apt-get install -y \
     poppler-utils \
     tesseract-ocr \

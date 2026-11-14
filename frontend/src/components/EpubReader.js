@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import JSZip from 'jszip';
 import TableOfContents from './TableOfContents';
@@ -101,6 +101,66 @@ function resolveZipPath(basePath, href) {
   return parts.join('/');
 }
 
+function readOutlineList(ol) {
+  return [...ol.children]
+    .filter((node) => node.tagName === 'LI')
+    .map((item) => {
+      const link = [...item.children].find((node) => node.tagName === 'A');
+      const child = [...item.children].find((node) => node.tagName === 'OL');
+      return {
+        title: link?.textContent?.trim() || '',
+        href: link?.getAttribute('href') || '',
+        children: child ? readOutlineList(child) : [],
+      };
+    })
+    .filter((item) => item.title);
+}
+
+function outlineFromNav(doc) {
+  const navs = [...doc.querySelectorAll('nav')];
+  const toc = navs.find((node) => String(node.getAttribute('epub:type') || '').includes('toc'));
+  const list = toc && [...toc.children].find((node) => node.tagName === 'OL');
+  if (!list) {
+    return [];
+  }
+  const items = readOutlineList(list);
+  const titles = [];
+  const walk = (nodes) => {
+    nodes.forEach((item) => {
+      titles.push(item.title);
+      walk(item.children || []);
+    });
+  };
+  walk(items);
+  // A list of bare page numbers is not the book's outline.
+  if (titles.length === 0 || titles.every((title) => /^\d+$/.test(title))) {
+    return [];
+  }
+  return items;
+}
+
+async function cssWithFonts(cssText, zip, opfBasePath) {
+  const fontUrls = [];
+  let next = cssText;
+  const matches = [...cssText.matchAll(/url\((['"]?)([^'")]+)\1\)/g)];
+  for (const match of matches) {
+    const raw = match[2];
+    if (!raw || raw.startsWith('data:') || raw.startsWith('http') || raw.startsWith('blob:')) {
+      continue;
+    }
+    const fontPath = resolveZipPath(opfBasePath, raw);
+    const fontFile = zip.file(fontPath);
+    if (!fontFile) {
+      continue;
+    }
+    const blob = await fontFile.async('blob');
+    const objectUrl = URL.createObjectURL(blob);
+    fontUrls.push(objectUrl);
+    next = next.replace(match[0], `url("${objectUrl}")`);
+  }
+  return { cssText: next, fontUrls };
+}
+
 function readMetadataTag(doc, tagName, fallback = '') {
   const namespaced = doc.getElementsByTagNameNS('*', tagName);
   if (namespaced.length > 0) {
@@ -122,7 +182,10 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
   const [pages, setPages] = useState([]);
   const [bookMetadata, setBookMetadata] = useState({});
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [outline, setOutline] = useState([]);
+  const [anchor, setAnchor] = useState('');
   const [isTocOpen, setIsTocOpen] = useState(() => window.innerWidth > 900);
+  const fontUrlsRef = useRef([]);
 
   const parseEpub = useCallback(async (fileBlob) => {
     setIsLoading(true);
@@ -177,8 +240,22 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
         if (!cssFile) continue;
         cssParts.push(await cssFile.async('text'));
       }
-
       const htmlParser = new DOMParser();
+      const embedded = await cssWithFonts(cssParts.join('\n'), zip, opfBasePath);
+      fontUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      fontUrlsRef.current = embedded.fontUrls;
+
+      let outlineItems = [];
+      const navItem = Object.values(manifest).find((item) => (item.properties || '').includes('nav'));
+      if (navItem) {
+        const navFile = zip.file(resolveZipPath(opfBasePath, navItem.href));
+        if (navFile) {
+          const navDoc = htmlParser.parseFromString(await navFile.async('text'), 'text/html');
+          outlineItems = outlineFromNav(navDoc);
+        }
+      }
+      setOutline(outlineItems);
+
       const pagesData = [];
       const spineItems = opfDoc.querySelectorAll('spine itemref');
       for (const spineItem of spineItems) {
@@ -211,12 +288,13 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
       setEpubData({
         zip,
         opfBasePath,
-        cssText: cssParts.join('\n'),
+        cssText: embedded.cssText,
       });
     } catch (parseError) {
       console.error('Error parsing EPUB:', parseError);
       setError('Failed to load this EPUB. Try another file.');
       setPages([]);
+      setOutline([]);
       setEpubData(null);
     } finally {
       setIsLoading(false);
@@ -254,9 +332,10 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
     loadSource();
   }, [epubFile, epubUrl, token, parseEpub]);
 
-  const handlePageChange = useCallback((pageIndex) => {
+  const handlePageChange = useCallback((pageIndex, href) => {
     if (pageIndex < 0 || pageIndex >= pages.length) return;
     setCurrentPageIndex(pageIndex);
+    setAnchor(String(href || '').split('#')[1] || '');
     if (window.innerWidth <= 900) {
       setIsTocOpen(false);
     }
@@ -310,6 +389,7 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
           currentPageIndex={currentPageIndex}
           onPageSelect={handlePageChange}
           bookMetadata={bookMetadata}
+          outline={outline}
         />
       </Sidebar>
 
@@ -329,6 +409,7 @@ const EpubReader = ({ epubFile, epubUrl, token, onBack }) => {
             pages={pages}
             currentPageIndex={currentPageIndex}
             epubData={epubData}
+            anchor={anchor}
             onPageChange={handlePageChange}
           />
         </ContentArea>

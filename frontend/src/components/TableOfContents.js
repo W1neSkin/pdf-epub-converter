@@ -87,7 +87,44 @@ const PageTitle = styled.span`
   margin-top: 0.2rem;
 `;
 
-const TableOfContents = ({ pages, currentPageIndex, onPageSelect, bookMetadata }) => {
+function pageIndexFromHref(href, pages) {
+  const file = String(href || '').split('#')[0];
+  if (!file) {
+    return -1;
+  }
+  return pages.findIndex((page) => page.href === file || String(page.href || '').endsWith(`/${file}`) || file.endsWith(page.href));
+}
+
+function OutlineList({ items, pages, currentPageIndex, onPageSelect, depth }) {
+  return items.map((item, index) => {
+    const pageIndex = pageIndexFromHref(item.href, pages);
+    return (
+      <div key={`${item.href}-${index}`}>
+        <PageItem
+          type="button"
+          $isActive={pageIndex === currentPageIndex}
+          aria-current={pageIndex === currentPageIndex ? 'page' : undefined}
+          onClick={() => pageIndex >= 0 && onPageSelect(pageIndex, item.href)}
+          style={{ paddingLeft: `${1 + depth * 0.75}rem` }}
+        >
+          <PageTitle>{item.title}</PageTitle>
+        </PageItem>
+        {item.children && item.children.length > 0 && (
+          <OutlineList
+            items={item.children}
+            pages={pages}
+            currentPageIndex={currentPageIndex}
+            onPageSelect={onPageSelect}
+            depth={depth + 1}
+          />
+        )}
+      </div>
+    );
+  });
+}
+
+const TableOfContents = ({ pages, currentPageIndex, onPageSelect, bookMetadata, outline }) => {
+  const hasOutline = Array.isArray(outline) && outline.length > 0;
   return (
     <TocContainer>
       <TocHeader>
@@ -97,7 +134,15 @@ const TableOfContents = ({ pages, currentPageIndex, onPageSelect, bookMetadata }
       </TocHeader>
       
       <TocContent>
-        {pages.map((page, index) => (
+        {hasOutline ? (
+          <OutlineList
+            items={outline}
+            pages={pages}
+            currentPageIndex={currentPageIndex}
+            onPageSelect={onPageSelect}
+            depth={0}
+          />
+        ) : pages.map((page, index) => (
           <PageItem
             key={page.id || index}
             type="button"

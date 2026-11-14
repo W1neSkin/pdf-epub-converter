@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Tuple
 import pdfplumber
 from pdf2image import convert_from_path
 
+from pdfcalque_bridge import read_report
+
 from document_content import (
     build_page_records,
     build_unpositioned_table_records,
@@ -481,6 +483,32 @@ def _select_best_candidate(candidates: List[Dict[str, object]]) -> Dict[str, obj
     return max(with_tables, key=lambda item: item["score"])
 
 
+def _rows_score(rows: List[List[object]]) -> float:
+    """Score one table. Long paragraph cells are columns of a book, not a table."""
+    score = _table_score([[str(cell) for cell in row] for row in rows])
+    if score <= 0:
+        return 0.0
+    lengths = [len(str(cell).strip()) for row in rows for cell in row if str(cell).strip()]
+    if len(lengths) < 4:
+        return 0.0
+    lengths.sort()
+    median = lengths[len(lengths) // 2]
+    long = sum(1 for length in lengths if length > 40)
+    # A shredded text column has a medium-long cell in every row.
+    # A real table's typical cell is a word or a number.
+    if median > 20 or long * 2 > len(lengths):
+        return 0.0
+    return score
+
+
+def _pdfcalque_wins(tables: List[Dict[str, object]], their_score: float) -> bool:
+    """True when PDFCalque's cells for this page score at least as well as the Python ones."""
+    if not tables:
+        return False
+    our_score = sum(_rows_score(list(table.get("rows") or [])) for table in tables)
+    return our_score > 0 and our_score >= float(their_score or 0)
+
+
 def extract_tables_from_pdf(pdf_path: str) -> Dict[str, object]:
     """
     Extract tables from a PDF using several strategy profiles.
@@ -497,6 +525,9 @@ def extract_tables_from_pdf(pdf_path: str) -> Dict[str, object]:
     text_layer_pages = 0
     used_camelot = False
     used_ocr = False
+    # None when the binary is not installed. The Python strategies still run.
+    pdfcalque_report = read_report(pdf_path)
+    pdfcalque_tables = list((pdfcalque_report or {}).get("tables") or [])
 
     with pdfplumber.open(pdf_path) as pdf:
         page_count = len(pdf.pages)
@@ -521,20 +552,43 @@ def extract_tables_from_pdf(pdf_path: str) -> Dict[str, object]:
                     candidates.extend(camelot_candidates)
 
             best = _select_best_candidate(candidates)
+            our_on_page = [
+                table for table in pdfcalque_tables if int(table.get("page") or 0) == page_index
+            ]
+            # Ignore a high score made of long prose. That is a text column, not a table.
+            their_tables = [
+                table for table in ((best or {}).get("tables") or [])
+                if _rows_score(list(table.get("rows") or [])) > 0
+            ]
+            their_score = sum(_rows_score(list(table.get("rows") or [])) for table in their_tables)
+            use_ours = _pdfcalque_wins(our_on_page, their_score)
 
             diagnostics.append(
                 {
                     "page": page_index,
                     "scores": {item["strategy"]: round(float(item["score"]), 2) for item in candidates},
-                    "selected_strategy": best["strategy"] if best else None,
-                    "selected_tables": len(best["tables"]) if best else 0,
-                    "fragmented": best.get("fragmented") if best else None,
+                    "selected_strategy": "pdfcalque" if use_ours else (best["strategy"] if best else None),
+                    "selected_tables": len(our_on_page) if use_ours else len(their_tables),
+                    "fragmented": False if use_ours else (best.get("fragmented") if best else None),
                 }
             )
 
             page_tables: List[Dict[str, object]] = []
-            if best and best["score"] > 0:
-                for table_index, table_data in enumerate(best["tables"], 1):
+            if use_ours:
+                # These cells beat pdfplumber and Camelot on this page.
+                for table_index, table_data in enumerate(our_on_page, 1):
+                    table_record = {
+                        "page": page_index,
+                        "table_index": table_index,
+                        "strategy": "pdfcalque",
+                        "rows": table_data.get("rows") or [],
+                    }
+                    if table_data.get("bbox"):
+                        table_record["bbox"] = table_data["bbox"]
+                    extracted.append(table_record)
+                    page_tables.append(table_record)
+            elif their_tables:
+                for table_index, table_data in enumerate(their_tables, 1):
                     table_record = {
                         "page": page_index,
                         "table_index": table_index,
