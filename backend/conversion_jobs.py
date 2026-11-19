@@ -14,7 +14,7 @@ import httpx
 from alternative_parser import AlternativePDFParser
 from epub_generator import EPUBGenerator
 from html_generator import HTMLPageGenerator
-from pdfcalque_bridge import prefer_pdfcalque_pages, read_report
+from pdfcalque_bridge import last_failure, prefer_pdfcalque_pages, read_report
 from storage import storage
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ def run_conversion_job(
             report(80, "Packaging EPUB...", pages=page_count)
         else:
             # The library did not run. Poppler draws the pages instead.
-            report(12, "PDFCalque unavailable, using Poppler...")
+            report(12, f"PDFCalque unavailable, using Poppler. {last_failure()}")
             if os.path.isfile(epub_path):
                 os.remove(epub_path)
             processor = AlternativePDFParser()
@@ -157,7 +157,7 @@ def run_conversion_job(
             output_dir,
             status="completed",
             progress=100,
-            message="Conversion completed",
+            message="Conversion completed" if use_pdfcalque else f"Conversion completed without PDFCalque. {last_failure()}",
             download_url=download_url,
             pages=page_count,
             total_words=total_words,

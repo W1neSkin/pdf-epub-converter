@@ -11,6 +11,19 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+_last_failure = ""
+
+
+def last_failure() -> str:
+    """Short reason the last PDFCalque run produced no report."""
+    return _last_failure
+
+
+def _fail(reason: str) -> None:
+    global _last_failure
+    text = " ".join(reason.split())
+    _last_failure = text[:240]
+
 
 def binary():
     """Path to pdfcalque, or None when this machine does not have it."""
@@ -42,6 +55,7 @@ def read_report(pdf_path, epub_path=None):
     """
     program = binary()
     if not program:
+        _fail("pdfcalque program was not found")
         return None
     with tempfile.TemporaryDirectory(prefix="pdfcalque_") as tmp:
         json_path = Path(tmp) / "report.json"
@@ -57,13 +71,17 @@ def read_report(pdf_path, epub_path=None):
                 timeout=180,
                 check=False,
             )
-        except (OSError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired) as err:
+            _fail(str(err))
             return None
         if completed.returncode != 0 or not json_path.is_file():
+            detail = (completed.stderr or completed.stdout or "pdfcalque failed").strip()
+            _fail(detail or "pdfcalque failed")
             return None
         try:
             return json.loads(json_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as err:
+            _fail(str(err))
             return None
 
 
