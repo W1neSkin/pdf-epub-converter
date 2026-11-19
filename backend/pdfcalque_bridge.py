@@ -34,9 +34,10 @@ def binary():
     if found:
         return found
     here = Path(__file__).resolve().parent
-    # bin/ is produced by build.sh. The sibling checkout is the local dev build.
+    # pdfcalque_bin is downloaded during deploy. bin/ is gitignored and
+    # does not survive onto the running service. The sibling path is a local build.
     checkout = here.parents[1] / "PDFCalque" / "target" / "release"
-    candidates = []
+    candidates = [here / "pdfcalque_bin"]
     for name in ("pdfcalque.exe", "pdfcalque"):
         candidates.append(here / "bin" / name)
         candidates.append(checkout / name)

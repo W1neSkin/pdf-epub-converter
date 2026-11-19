@@ -12,13 +12,14 @@ pip install -r requirements.txt
 echo "Creating necessary directories..."
 mkdir -p /tmp/uploads
 mkdir -p /tmp/outputs
-mkdir -p bin
 
+# Next to the Python files. A bin/ directory is gitignored and disappears
+# from the running service, so the program was never found.
 echo "Downloading PDFCalque..."
-curl -fL --retry 3 -o bin/pdfcalque \
+curl -fL --retry 3 -o pdfcalque_bin \
   https://github.com/W1neSkin/PDFCalque/releases/download/linux/pdfcalque
-chmod +x bin/pdfcalque
-test -s bin/pdfcalque
+chmod +x pdfcalque_bin
+test -s pdfcalque_bin
 
 echo "PDFCalque binary is ready"
 echo "Build completed successfully!"
