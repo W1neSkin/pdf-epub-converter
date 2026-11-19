@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { liftTransparentWords } from './scanTextLayer';
+import { fitScanWords, liftTransparentWords } from './scanTextLayer';
 
 const ViewerContainer = styled.div`
   width: 100%;
@@ -90,14 +90,17 @@ const PageContent = styled.div`
     background: rgba(59, 130, 246, 0.25);
   }
 
-  .scan-word {
+  .scan-word,
+  .scan-word-text {
     cursor: text;
     user-select: text;
     -webkit-user-select: text;
   }
 
   .scan-word::selection,
-  .scan-word::-moz-selection {
+  .scan-word::-moz-selection,
+  .scan-word-text::selection,
+  .scan-word-text::-moz-selection {
     background: rgba(59, 130, 246, 0.35);
     color: transparent;
     -webkit-text-fill-color: transparent;
@@ -236,6 +239,32 @@ const PageViewer = ({ pages, currentPageIndex, epubData, anchor }) => {
     }
   }, [pages, currentPageIndex, processPageContent]);
 
+  const pageScale = isFixedLayout
+    ? calculatePageScale(availableWidth, fixedPageSize.width)
+    : 1;
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) {
+      return undefined;
+    }
+    let cancel = false;
+    const fit = () => {
+      if (!cancel) {
+        fitScanWords(root);
+      }
+    };
+    fit();
+    const frame = requestAnimationFrame(fit);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fit);
+    }
+    return () => {
+      cancel = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [processedContent, pageScale]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -270,10 +299,6 @@ const PageViewer = ({ pages, currentPageIndex, epubData, anchor }) => {
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
-
-  const pageScale = isFixedLayout
-    ? calculatePageScale(availableWidth, fixedPageSize.width)
-    : 1;
 
   if (!pages || pages.length === 0) {
     return (
