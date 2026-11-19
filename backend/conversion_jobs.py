@@ -14,7 +14,7 @@ import httpx
 from alternative_parser import AlternativePDFParser
 from epub_generator import EPUBGenerator
 from html_generator import HTMLPageGenerator
-from pdfcalque_bridge import last_failure, prefer_pdfcalque_pages, read_report
+from pdfcalque_bridge import last_failure, open_book, prefer_pdfcalque_pages
 from storage import storage
 
 logger = logging.getLogger(__name__)
@@ -83,20 +83,30 @@ def run_conversion_job(
                 pages=pages or None,
             )
 
-        report(8, "Reading the PDF...")
+        report(8, "Parsing the PDF with PDFCalque...")
         epub_path = os.path.join(output_dir, f"{conversion_id}.epub")
-        # PDFCalque keeps the PDF text, fonts and the scan picture.
+        # Parse once. Page counts and the EPUB both come from this object.
         # Poppler remains for pages that are mostly vector drawings.
-        pdfcalque_report = read_report(pdf_path, epub_path)
-        use_pdfcalque = (
-            bool(pdfcalque_report)
-            and prefer_pdfcalque_pages(pdfcalque_report)
-            and os.path.isfile(epub_path)
-        )
+        book = open_book(pdf_path)
+        pdfcalque_report = None
+        if book is not None:
+            try:
+                pdfcalque_report = json.loads(book.report())
+            except Exception as err:
+                logger.warning("PDFCalque report failed: %s", err)
+                pdfcalque_report = None
+        use_pdfcalque = bool(pdfcalque_report) and prefer_pdfcalque_pages(pdfcalque_report)
         if use_pdfcalque:
             page_count = int(pdfcalque_report.get("pages") or 0)
             total_words = int(pdfcalque_report.get("words") or 0)
             language = str(pdfcalque_report.get("language") or "").strip() or "en"
+            report(40, "Writing EPUB from the parsed PDF...", pages=page_count)
+            try:
+                book.write_epub(epub_path)
+            except Exception as err:
+                logger.warning("PDFCalque EPUB failed: %s", err)
+                use_pdfcalque = False
+        if use_pdfcalque:
             report(80, "Packaging EPUB...", pages=page_count)
         else:
             # The library did not run. Poppler draws the pages instead.

@@ -20,24 +20,27 @@ def _fail(reason: str) -> None:
     _last_failure = text[:240]
 
 
-def read_report(pdf_path, epub_path=None):
-    """
-    Ask the library to read a PDF.
-
-    When epub_path is set, the library also writes the EPUB.
-    None means the module is missing or the PDF could not be read.
-    """
+def open_book(pdf_path):
+    """Parse the PDF with the library. None when the module is missing or the file failed."""
     try:
         import pdfcalque
     except ImportError as err:
         _fail(f"pdfcalque module is not installed: {err}")
         return None
     try:
-        if epub_path:
-            raw = pdfcalque.export_epub(pdf_path, epub_path)
-        else:
-            raw = pdfcalque.report(pdf_path)
-        return json.loads(raw)
+        return pdfcalque.parse(pdf_path)
+    except Exception as err:
+        _fail(str(err))
+        return None
+
+
+def read_report(pdf_path):
+    """Parse the PDF and return its summary. This does not write an EPUB."""
+    book = open_book(pdf_path)
+    if book is None:
+        return None
+    try:
+        return json.loads(book.report())
     except Exception as err:
         _fail(str(err))
         return None
