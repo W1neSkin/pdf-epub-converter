@@ -1,89 +1,46 @@
-"""PDFCalque command used by the converter when the binary is available.
+"""Call the PDFCalque Python module from the converter.
 
-The binary writes an EPUB and a JSON report. This module decides which result
-to keep. A missing binary is not an error: the Python pipeline stays in place.
+The module is the library itself: `import pdfcalque`. There is no separate program.
+If the module is not installed, the existing Python pipeline still converts the file.
 """
 
 import json
-import os
-import shutil
-import subprocess
-import tempfile
-from pathlib import Path
 
 _last_failure = ""
 
 
 def last_failure() -> str:
-    """Short reason the last PDFCalque run produced no report."""
+    """Short reason the last PDFCalque call produced no report."""
     return _last_failure
 
 
 def _fail(reason: str) -> None:
     global _last_failure
-    text = " ".join(reason.split())
+    text = " ".join(str(reason).split())
     _last_failure = text[:240]
-
-
-def binary():
-    """Path to pdfcalque, or None when this machine does not have it."""
-    env = os.environ.get("PDFCALQUE_BIN", "").strip()
-    if env and Path(env).is_file():
-        return env
-    found = shutil.which("pdfcalque") or shutil.which("pdfcalque.exe")
-    if found:
-        return found
-    here = Path(__file__).resolve().parent
-    # pdfcalque_bin is downloaded during deploy. bin/ is gitignored and
-    # does not survive onto the running service. The sibling path is a local build.
-    checkout = here.parents[1] / "PDFCalque" / "target" / "release"
-    candidates = [here / "pdfcalque_bin"]
-    for name in ("pdfcalque.exe", "pdfcalque"):
-        candidates.append(here / "bin" / name)
-        candidates.append(checkout / name)
-    for candidate in candidates:
-        if candidate.is_file():
-            return str(candidate)
-    return None
 
 
 def read_report(pdf_path, epub_path=None):
     """
-    Run PDFCalque.
+    Ask the library to read a PDF.
 
-    epub_path writes the book and the report. Without it, only the report is written.
-    None means the tool is missing or the PDF could not be read.
+    When epub_path is set, the library also writes the EPUB.
+    None means the module is missing or the PDF could not be read.
     """
-    program = binary()
-    if not program:
-        _fail("pdfcalque program was not found")
+    try:
+        import pdfcalque
+    except ImportError as err:
+        _fail(f"pdfcalque module is not installed: {err}")
         return None
-    with tempfile.TemporaryDirectory(prefix="pdfcalque_") as tmp:
-        json_path = Path(tmp) / "report.json"
+    try:
         if epub_path:
-            command = [program, "export", pdf_path, epub_path, str(json_path)]
+            raw = pdfcalque.export_epub(pdf_path, epub_path)
         else:
-            command = [program, "tables", pdf_path, str(json_path)]
-        try:
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=180,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as err:
-            _fail(str(err))
-            return None
-        if completed.returncode != 0 or not json_path.is_file():
-            detail = (completed.stderr or completed.stdout or "pdfcalque failed").strip()
-            _fail(detail or "pdfcalque failed")
-            return None
-        try:
-            return json.loads(json_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as err:
-            _fail(str(err))
-            return None
+            raw = pdfcalque.report(pdf_path)
+        return json.loads(raw)
+    except Exception as err:
+        _fail(str(err))
+        return None
 
 
 def prefer_pdfcalque_pages(report):
