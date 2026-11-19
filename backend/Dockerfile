@@ -1,20 +1,13 @@
-# EPUB is written by PDFCalque. Poppler remains for vector-only pages.
-FROM rust:1-bookworm AS pdfcalque
-WORKDIR /src
-COPY pdfcalque /src
-RUN cargo build --release --bin pdfcalque
+# Library: the wheel in requirements.txt. Tesseract is installed in this image.
+# The Python service on Render cannot run apt-get; its build disk is read-only.
+FROM python:3.12-slim-bookworm
 
-FROM python:3.12-slim
-
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     tesseract-ocr \
-    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
-COPY --from=pdfcalque /src/target/release/pdfcalque /usr/local/bin/pdfcalque
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -22,5 +15,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 8000
-
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
