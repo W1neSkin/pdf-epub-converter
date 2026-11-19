@@ -12,4 +12,6 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 cloudinary==1.40.0
 httpx==0.25.2
-PyJWT==2.8.0 
+PyJWT==2.8.0
+# The Render build installs this file. The wheel is the library the job imports.
+pdfcalque @ https://github.com/W1neSkin/PDFCalque/releases/download/python/pdfcalque-cp312.whl#sha256=867a4d4d7082fec4808975f0dcc978a203f735b20ecde62288bcba19c449dc70 
