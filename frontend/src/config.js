@@ -6,9 +6,11 @@ export const API_BASE_URL =
 export const AUTH_BASE_URL =
   process.env.REACT_APP_AUTH_URL || 'https://pdf-converter-auth-service.onrender.com';
 
-// Conversion calls go directly to converter service for better cold-start behavior.
+// Conversion calls the Docker service. That image has Tesseract, so a scan
+// keeps its picture and gets a transparent word layer. The older Python
+// service cannot install Tesseract, and it stays up as the previous host.
 export const CONVERTER_BASE_URL =
-  process.env.REACT_APP_CONVERTER_URL || 'https://pdf-epub-converter-api.onrender.com';
+  process.env.REACT_APP_CONVERTER_URL || 'https://pdf-epub-scan.onrender.com';
 
 // Free-plan limits. Keep in sync with backend/plan_limits.py.
 // A future paid plan can raise pages and file size when we pay for a bigger host.

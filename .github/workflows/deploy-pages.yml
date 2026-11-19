@@ -52,7 +52,7 @@ jobs:
         # Login and conversion must call the sleeping service directly.
         # The gateway is usually already awake and gives up before that service finishes booting.
         REACT_APP_AUTH_URL: https://pdf-converter-auth-service.onrender.com
-        REACT_APP_CONVERTER_URL: https://pdf-epub-converter-api.onrender.com
+        REACT_APP_CONVERTER_URL: https://pdf-epub-scan.onrender.com
         
     - name: Setup Pages
       uses: actions/configure-pages@v4
