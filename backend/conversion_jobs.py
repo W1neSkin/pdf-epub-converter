@@ -99,6 +99,8 @@ def run_conversion_job(
             language = str(pdfcalque_report.get("language") or "").strip() or "en"
             report(80, "Packaging EPUB...", pages=page_count)
         else:
+            # The library did not run. Poppler draws the pages instead.
+            report(12, "PDFCalque unavailable, using Poppler...")
             if os.path.isfile(epub_path):
                 os.remove(epub_path)
             processor = AlternativePDFParser()
