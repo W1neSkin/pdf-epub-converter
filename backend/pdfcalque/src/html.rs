@@ -91,9 +91,8 @@ fn write_elements(out: &mut String, elements: &[Element], page_h: f32) {
 }
 
 fn write_text(out: &mut String, text: &TextBlock, page_h: f32) {
-    if !text.visible {
-        return;
-    }
+    // Невидимый текст PDF и слой распознавания всё равно пишутся:
+    // заливка прозрачная, буквы можно выделить поверх картинки.
     for line in &text.lines {
         for span in &line.spans {
             let family = font_family(&span.font);
@@ -114,7 +113,8 @@ fn write_text(out: &mut String, text: &TextBlock, page_h: f32) {
                 } else {
                     String::new()
                 };
-                let fill = if span.color.a < 0.01 { "transparent" } else { &css_color(span.color) };
+                // Прозрачная заливка не стирает картинку, но буква остаётся в SVG и выделяется.
+                let fill = if !text.visible || span.color.a < 0.01 { "transparent" } else { &css_color(span.color) };
                 out.push_str(&format!(
                     "<text x=\"{}\" y=\"{}\" font-size=\"{}\" font-family=\"{}\" font-weight=\"{weight}\" font-style=\"{style}\" fill=\"{fill}\"{fit}{turn}>{}</text>",
                     num(glyph.origin.x), num(y), num(span.font.size), family, escape(&ch.to_string())
