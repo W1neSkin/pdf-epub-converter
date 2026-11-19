@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
+import { liftTransparentWords } from './scanTextLayer';
 
 const ViewerContainer = styled.div`
   width: 100%;
@@ -88,6 +89,19 @@ const PageContent = styled.div`
   ::selection {
     background: rgba(59, 130, 246, 0.25);
   }
+
+  .scan-word {
+    cursor: text;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  .scan-word::selection,
+  .scan-word::-moz-selection {
+    background: rgba(59, 130, 246, 0.35);
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
 `;
 
 export function calculatePageScale(availableWidth, pageWidth) {
@@ -175,6 +189,9 @@ const PageViewer = ({ pages, currentPageIndex, epubData, anchor }) => {
           svg.style.width = `${width}px`;
           svg.style.height = `${height}px`;
         }
+      }
+      if (svg) {
+        liftTransparentWords(svg);
       }
       setIsFixedLayout(fixedLayoutDetected);
       setFixedPageSize({ width, height });
