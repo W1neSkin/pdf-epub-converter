@@ -3,10 +3,10 @@
 // transparent selection color leaves only the highlight, and copying still
 // returns the word.
 //
-// The stand-in font is wider than the ink, especially in capitals. A guessed
-// letter-spacing made that worse, so a drag along one line also hit the lines
-// below. Each word is therefore clipped to its ink box, then scaled to that
-// width once the browser has measured the real glyphs.
+// A CSS scale or a clipped box hides the end of the word from the caret, so
+// Firefox cannot select it. Letter-spacing changes the real caret positions.
+// Measured spacing, including negative spacing, pulls the word onto its ink
+// box and leaves the last letter selectable.
 
 export function liftTransparentWords(svg) {
   const words = svg.querySelectorAll('text[fill="transparent"]');
@@ -40,67 +40,51 @@ export function liftTransparentWords(svg) {
     const baseline = number(word.getAttribute('y'), 0) * scaleY;
     const textLength = number(word.getAttribute('textLength'), 0) * scaleX;
     const span = svg.ownerDocument.createElement('span');
-    const inkHeight = fontSize / 0.8;
     span.className = 'scan-word';
     span.style.position = 'absolute';
     span.style.left = `${x}px`;
-    span.style.top = `${baseline - inkHeight}px`;
-    span.style.height = `${inkHeight}px`;
+    span.style.top = `${baseline - fontSize * 0.8}px`;
+    span.style.fontSize = `${fontSize}px`;
+    span.style.fontFamily = word.getAttribute('font-family') || 'serif';
     span.style.lineHeight = '1';
-    span.style.overflow = 'hidden';
     span.style.whiteSpace = 'pre';
     span.style.color = 'transparent';
     span.style.webkitTextFillColor = 'transparent';
 
     const letters = text.trim();
     if (!letters) {
-      // The gap after a word. It stays in the copied text, but it must not
-      // steal the hit target from the next word.
       span.textContent = ' ';
-      span.style.width = '0';
-      span.style.pointerEvents = 'none';
       layer.appendChild(span);
       word.remove();
       return;
     }
 
-    span.style.width = `${textLength}px`;
+    span.textContent = letters;
     span.dataset.inkWidth = String(textLength);
-    const inner = svg.ownerDocument.createElement('span');
-    inner.className = 'scan-word-text';
-    inner.textContent = letters;
-    inner.style.display = 'inline-block';
-    inner.style.fontSize = `${fontSize}px`;
-    inner.style.fontFamily = word.getAttribute('font-family') || 'serif';
-    inner.style.lineHeight = '1';
-    inner.style.whiteSpace = 'pre';
-    inner.style.color = 'transparent';
-    inner.style.webkitTextFillColor = 'transparent';
-    inner.style.transformOrigin = 'left center';
-    span.appendChild(inner);
     layer.appendChild(span);
     word.remove();
   });
 }
 
-// Squeeze each word onto its ink box. Called after layout, because only then
-// is the real glyph width known.
+// Pull each word onto its ink width. Called after layout, because only then
+// is the real glyph width known. Spacing may be negative: that is what keeps
+// the last letter inside the printed word.
 export function fitScanWords(root) {
   if (!root || !root.querySelectorAll) {
     return;
   }
-  root.querySelectorAll('.scan-word-text').forEach((inner) => {
-    const target = number(inner.parentNode && inner.parentNode.dataset.inkWidth, 0);
-    if (!(target > 0)) {
+  root.querySelectorAll('.scan-word').forEach((span) => {
+    const target = number(span.dataset.inkWidth, 0);
+    const letters = (span.textContent || '').trim();
+    if (!(target > 0) || letters.length < 2) {
       return;
     }
-    inner.style.transform = 'none';
-    const natural = inner.scrollWidth;
+    span.style.letterSpacing = '0px';
+    const natural = span.scrollWidth;
     if (!(natural > 0)) {
       return;
     }
-    inner.style.transformOrigin = 'left center';
-    inner.style.transform = `scaleX(${target / natural})`;
+    span.style.letterSpacing = `${(target - natural) / (letters.length - 1)}px`;
   });
 }
 

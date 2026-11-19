@@ -30,25 +30,25 @@ describe('scan text layer', () => {
     document.body.innerHTML = '';
   });
 
-  test('clips a word to its ink box and scales the glyphs to that width', () => {
+  test('pulls a wide word onto its ink box without clipping the last letter', () => {
     const root = svgWith([
       { x: '251.28', y: '89.86', fontSize: '26.50', textLength: '113.04', text: 'INVOICE' },
     ]);
     liftTransparentWords(root.querySelector('svg'));
 
     const word = root.querySelector('.scan-word');
-    expect(word.style.width).toBe('113.04px');
-    expect(word.style.letterSpacing).toBe('');
-    expect(word.style.overflow).toBe('hidden');
+    expect(word.style.overflow).toBe('');
+    expect(word.style.width).toBe('');
+    expect(word.style.top).toBe(`${89.86 - 26.5 * 0.8}px`);
     expect(word.textContent).toBe('INVOICE');
 
-    const glyphs = word.querySelector('.scan-word-text');
-    Object.defineProperty(glyphs, 'scrollWidth', { configurable: true, value: 160 });
+    Object.defineProperty(word, 'scrollWidth', { configurable: true, value: 160 });
     fitScanWords(root);
-    expect(glyphs.style.transform).toBe(`scaleX(${113.04 / 160})`);
+    expect(word.style.transform).toBe('');
+    expect(word.style.letterSpacing).toBe(`${(113.04 - 160) / 6}px`);
   });
 
-  test('a gap after a word does not keep its own hit box', () => {
+  test('keeps the gap after a word in the copied text', () => {
     const root = svgWith([
       { x: '78', y: '220', fontSize: '10', textLength: '22', text: 'Item' },
       { x: '100', y: '220', fontSize: '10', text: ' ' },
@@ -57,8 +57,7 @@ describe('scan text layer', () => {
 
     const boxes = root.querySelectorAll('.scan-word');
     expect(boxes).toHaveLength(2);
-    expect(boxes[1].style.width).toBe('0px');
-    expect(boxes[1].style.pointerEvents).toBe('none');
     expect(boxes[1].textContent).toBe(' ');
+    expect(boxes[1].style.pointerEvents).toBe('');
   });
 });
