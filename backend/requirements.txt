@@ -15,5 +15,5 @@ httpx==0.25.2
 PyJWT==2.8.0
 # Render runs: pip install -r requirements.txt. The filename must be a real wheel name.
 # No hash: each PDFCalque release replaces this same file, and a pinned hash then fails the build.
-# Rebuild after the wheel that reports each page while a scan is read.
+# Rebuild after the wheel that logs each parse step and its duration.
 pdfcalque @ https://github.com/W1neSkin/PDFCalque/releases/download/python/pdfcalque-0.1.0-cp312-cp312-manylinux_2_34_x86_64.whl
