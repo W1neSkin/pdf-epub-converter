@@ -247,6 +247,89 @@ const StateBox = styled.div`
   color: ${(props) => props.$error ? '#fecaca' : 'rgba(255, 255, 255, 0.82)'};
 `;
 
+const WAKE_ATTEMPTS = 10;
+const WAKE_GAP_MS = 4000;
+const ATTEMPT_TIMEOUT_MS = 20000;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isAsleep(status) {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+async function fetchLibrary(url, token, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// A sleeping host answers with an error before it is ready. One Retry used to
+// stop there. Keep asking until the library is up, or the attempts run out.
+export async function loadLibrary(token, options = {}) {
+  const pause = options.pause || wait;
+  const attempts = options.attempts || WAKE_ATTEMPTS;
+  const gapMs = options.gapMs ?? WAKE_GAP_MS;
+  const timeoutMs = options.timeoutMs || ATTEMPT_TIMEOUT_MS;
+  const isCancelled = options.isCancelled || (() => false);
+  const onWaking = options.onWaking || (() => {});
+  const request = options.fetchImpl
+    ? (url) => options.fetchImpl(url, { headers: { Authorization: `Bearer ${token}` } })
+    : (url) => fetchLibrary(url, token, timeoutMs);
+
+  let sawAsleep = false;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (isCancelled()) {
+      return { cancelled: true };
+    }
+    if (attempt > 0) {
+      sawAsleep = true;
+      onWaking();
+      await pause(gapMs);
+      if (isCancelled()) {
+        return { cancelled: true };
+      }
+    }
+    try {
+      const [statsResp, booksResp] = await Promise.all([
+        request(`${API_BASE_URL}/library/stats`),
+        request(`${API_BASE_URL}/library/books?limit=50`),
+      ]);
+      if (booksResp.status === 401) {
+        return { error: 'Your session is unavailable. Please sign in again.' };
+      }
+      if (booksResp.ok) {
+        const payload = await booksResp.json();
+        let stats = null;
+        if (statsResp.ok) {
+          const statsPayload = await statsResp.json();
+          stats = statsPayload.data || null;
+        }
+        return { books: payload.data || [], stats, error: '' };
+      }
+      if (!isAsleep(booksResp.status)) {
+        return { error: 'Could not load your books.' };
+      }
+      sawAsleep = true;
+    } catch (loadError) {
+      sawAsleep = true;
+    }
+  }
+  return {
+    error: sawAsleep
+      ? 'The library is still starting. Press Retry to keep waiting.'
+      : 'Could not load your books.',
+  };
+}
+
 const UserDashboard = ({
   user,
   onOpenBook,
@@ -259,10 +342,11 @@ const UserDashboard = ({
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState('list');
   const [error, setError] = useState('');
+  const [statusNote, setStatusNote] = useState('');
 
   const token = user?.token || localStorage.getItem('authToken') || '';
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (isCancelled = () => false) => {
     if (!token) {
       setLoading(false);
       setError('Your session is unavailable. Please sign in again.');
@@ -270,40 +354,35 @@ const UserDashboard = ({
     }
     setLoading(true);
     setError('');
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [statsResp, booksResp] = await Promise.all([
-        fetch(`${API_BASE_URL}/library/stats`, { headers, signal: controller.signal }),
-        fetch(`${API_BASE_URL}/library/books?limit=50`, { headers, signal: controller.signal }),
-      ]);
-
-      if (statsResp.ok) {
-        const payload = await statsResp.json();
-        setStats(payload.data || null);
-      }
-      if (booksResp.ok) {
-        const payload = await booksResp.json();
-        setBooks(payload.data || []);
-      } else {
-        setError('Could not load your books.');
-      }
-    } catch (loadError) {
-      console.error(loadError);
-      setError(
-        loadError.name === 'AbortError'
-          ? 'The library took too long to respond. Please retry.'
-          : 'Failed to load dashboard data.'
-      );
-    } finally {
-      clearTimeout(timeoutId);
-      setLoading(false);
+    setStatusNote('');
+    const result = await loadLibrary(token, {
+      isCancelled,
+      onWaking: () => {
+        if (!isCancelled()) {
+          setStatusNote('The library is starting. This can take a minute.');
+        }
+      },
+    });
+    if (result.cancelled || isCancelled()) {
+      return;
     }
+    if (result.books) {
+      setBooks(result.books);
+    }
+    if (result.stats) {
+      setStats(result.stats);
+    }
+    setError(result.error || '');
+    setStatusNote('');
+    setLoading(false);
   }, [token]);
 
   useEffect(() => {
-    loadDashboard();
+    let cancel = false;
+    loadDashboard(() => cancel);
+    return () => {
+      cancel = true;
+    };
   }, [loadDashboard]);
 
   const filteredBooks = useMemo(() => {
@@ -368,7 +447,7 @@ const UserDashboard = ({
     return (
       <StateBox>
         <i className="fas fa-spinner fa-spin" style={{ marginRight: '0.5rem' }}></i>
-        Loading your library...
+        {statusNote || 'Loading your library...'}
       </StateBox>
     );
   }
@@ -507,7 +586,7 @@ const UserDashboard = ({
         <StateBox $error>
           <div>{error}</div>
           <Actions style={{ justifyContent: 'center', marginTop: '0.75rem' }}>
-            <SecondaryAction type="button" onClick={loadDashboard}>
+            <SecondaryAction type="button" onClick={() => loadDashboard()}>
               Retry
             </SecondaryAction>
           </Actions>

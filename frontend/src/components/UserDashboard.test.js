@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import UserDashboard from './UserDashboard';
+import UserDashboard, { loadLibrary } from './UserDashboard';
 
 
 test('offers conversion and local EPUB actions in an empty library', async () => {
@@ -83,4 +83,37 @@ test('uses list view by default and lets the user switch views', async () => {
   });
   expect(screen.getByText(/No books match this search/i)).toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: /Search books/i })).toBeInTheDocument();
+});
+
+test('keeps asking until a sleeping library answers', async () => {
+  let booksCalls = 0;
+  const fetchImpl = jest.fn((url) => {
+    const requestUrl = String(url);
+    if (requestUrl.includes('/library/books')) {
+      booksCalls += 1;
+      if (booksCalls === 1) {
+        return Promise.resolve({ ok: false, status: 502 });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ id: '1', title: 'Scan' }] }),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { total_books: 0, total_pages: 0, total_size: 0 } }),
+    });
+  });
+
+  const result = await loadLibrary('token', {
+    fetchImpl,
+    pause: async () => {},
+    attempts: 4,
+  });
+
+  expect(result.error).toBe('');
+  expect(result.books).toEqual([{ id: '1', title: 'Scan' }]);
+  expect(booksCalls).toBe(2);
 });
