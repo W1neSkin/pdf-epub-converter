@@ -83,11 +83,30 @@ def run_conversion_job(
                 pages=pages or None,
             )
 
-        report(8, "Parsing the PDF with PDFCalque...")
+        def on_page(current, total):
+            current = int(current)
+            total = max(int(total), 1)
+            # 8..38 while the pages are read. The bar moves when the next page starts.
+            progress = 8 + int(30 * max(current - 1, 0) / total)
+            logger.info(
+                "Conversion %s reading page %s of %s",
+                conversion_id,
+                current,
+                total,
+            )
+            report(
+                progress,
+                f"Reading page {current} of {total}...",
+                current_page=current,
+                pages=total,
+            )
+
+        logger.info("Conversion %s parsing %s", conversion_id, filename)
+        report(8, "Counting pages...")
         epub_path = os.path.join(output_dir, f"{conversion_id}.epub")
         # Parse once. Page counts and the EPUB both come from this object.
         # Poppler remains for pages that are mostly vector drawings.
-        book = open_book(pdf_path)
+        book = open_book(pdf_path, on_page=on_page)
         pdfcalque_report = None
         if book is not None:
             try:

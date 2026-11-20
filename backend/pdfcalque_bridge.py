@@ -20,14 +20,23 @@ def _fail(reason: str) -> None:
     _last_failure = text[:240]
 
 
-def open_book(pdf_path):
-    """Parse the PDF with the library. None when the module is missing or the file failed."""
+def open_book(pdf_path, on_page=None):
+    """Parse the PDF with the library. None when the module is missing or the file failed.
+
+    on_page(current, total) runs before each page when this wheel supports it.
+    An older wheel only accepts the path, and that call is used instead.
+    """
     try:
         import pdfcalque
     except ImportError as err:
         _fail(f"pdfcalque module is not installed: {err}")
         return None
     try:
+        if on_page is not None:
+            try:
+                return pdfcalque.parse(pdf_path, on_page)
+            except TypeError:
+                return pdfcalque.parse(pdf_path)
         return pdfcalque.parse(pdf_path)
     except Exception as err:
         _fail(str(err))
