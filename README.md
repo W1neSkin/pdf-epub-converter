@@ -4,7 +4,7 @@
 
 Web application that turns a PDF into a fixed-layout EPUB, an Excel workbook, and CSV files for the tables it finds.
 
-Text and scans are converted with [PDFCalque](https://github.com/W1neSkin/PDFCalque). PDFCalque reads the PDF itself: real letters, positions, embedded fonts, and the bookmark tree. A scan stays the picture already stored in the file. Pages that are mostly vector drawings still go through Poppler, because PDFCalque does not paint shadings and blends. If the PDFCalque program is missing, the older Poppler pipeline is used for the whole EPUB.
+Text and scans are converted with [PDFCalque](https://github.com/W1neSkin/PDFCalque). PDFCalque reads the PDF itself: real letters, positions, embedded fonts, and the bookmark tree. A scan stays the picture already stored in the file. When the page has no text layer and Tesseract is installed, PDFCalque adds an invisible word layer on that picture. Pages that are mostly vector drawings still go through Poppler, because PDFCalque does not paint shadings and blends. If the PDFCalque module is missing, the older Poppler pipeline is used for the whole EPUB.
 
 Tables are extracted twice. PDFCalque looks for a drawn grid and for short words lined up in columns. pdfplumber, Camelot, and Tesseract look as well. Each page keeps the result with the better cells. Long prose in two columns is not stored as a table. A scan that has no text layer can still reach the Tesseract fallback.
 
@@ -67,7 +67,7 @@ The free service accepts PDF files up to **50 MB** and **50 pages**.
 ### Backend
 
 - Python and FastAPI
-- PDFCalque, the Rust library in `backend/pdfcalque`
+- PDFCalque, imported as the Python module `pdfcalque`
 - pdfplumber and PyPDF2
 - pdf2image and Poppler, used when PDFCalque is not the better page
 - Camelot and Tesseract OCR for tables
@@ -96,9 +96,9 @@ Auth      Converter   Library
          Cloudinary
 ```
 
-The converter calls `pdfcalque export` for an EPUB and `pdfcalque tables` when it is scoring tables. The report says how much text, how many full-page images, and how many paths the PDF contains. That report chooses PDFCalque or Poppler for the book. Table rows from both engines are scored, and the stronger cells are written to Excel and CSV.
+The converter imports `pdfcalque`, parses the PDF once, and writes the EPUB from that parse. While the pages are read it reports `Reading page 3 of 8`. The report says how much text, how many full-page images, and how many paths the PDF contains. That report chooses PDFCalque or Poppler for the book. Table rows from both engines are scored, and the stronger cells are written to Excel and CSV.
 
-Deploy compiles PDFCalque from `backend/pdfcalque` (`backend/build.sh`, or the Dockerfiles). The program is also found in `PDFCALQUE_BIN`, on `PATH`, or in a sibling `PDFCalque/target/release` checkout.
+The service that converts scans installs Tesseract in its image and installs the PDFCalque wheel from the GitHub release. The log lines that start with `pdfcalque` are the parse steps: page content, the full-page Tesseract run, and any small gap read after it. A `still reading` line is the same Tesseract process, still on that image.
 
 ## Local development
 
@@ -123,11 +123,11 @@ For the complete microservices environment, configure the required Supabase, Clo
 docker compose -f docker-compose.microservices.yml up --build
 ```
 
-The image build compiles PDFCalque. To point the Python process at a binary you built yourself, build it in the PDFCalque repo and set `PDFCALQUE_BIN` to that program:
+The scan image installs the published PDFCalque wheel and Tesseract. To time a file on your own machine, build the command in the PDFCalque repo:
 
 ```bash
 cargo build --release --bin pdfcalque
-export PDFCALQUE_BIN=/path/to/pdfcalque
+pdfcalque export input.pdf output.epub output.json
 ```
 
 See [environment setup](docs/environment-setup.md) and the [microservices guide](docs/MICROSERVICES_SETUP.md) for configuration details.
