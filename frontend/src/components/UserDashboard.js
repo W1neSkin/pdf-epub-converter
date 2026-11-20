@@ -247,9 +247,9 @@ const StateBox = styled.div`
   color: ${(props) => props.$error ? '#fecaca' : 'rgba(255, 255, 255, 0.82)'};
 `;
 
-const WAKE_ATTEMPTS = 10;
-const WAKE_GAP_MS = 4000;
-const ATTEMPT_TIMEOUT_MS = 20000;
+const WAKE_BUDGET_MS = 180000;
+const ATTEMPT_TIMEOUT_MS = 90000;
+const WAKE_GAP_MS = 5000;
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -272,46 +272,48 @@ async function fetchLibrary(url, token, timeoutMs) {
   }
 }
 
-// A sleeping host answers with an error before it is ready. One Retry used to
-// stop there. Keep asking until the library is up, or the attempts run out.
+// One request has to stay open. Cutting it off and firing another makes Render
+// refuse the wake, so the list never arrives.
 export async function loadLibrary(token, options = {}) {
   const pause = options.pause || wait;
-  const attempts = options.attempts || WAKE_ATTEMPTS;
   const gapMs = options.gapMs ?? WAKE_GAP_MS;
   const timeoutMs = options.timeoutMs || ATTEMPT_TIMEOUT_MS;
+  const budgetMs = options.budgetMs || WAKE_BUDGET_MS;
   const isCancelled = options.isCancelled || (() => false);
   const onWaking = options.onWaking || (() => {});
   const request = options.fetchImpl
     ? (url) => options.fetchImpl(url, { headers: { Authorization: `Bearer ${token}` } })
     : (url) => fetchLibrary(url, token, timeoutMs);
-
+  const started = Date.now();
   let sawAsleep = false;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
+
+  while (Date.now() - started < budgetMs) {
     if (isCancelled()) {
       return { cancelled: true };
     }
-    if (attempt > 0) {
-      sawAsleep = true;
+    if (sawAsleep) {
       onWaking();
       await pause(gapMs);
-      if (isCancelled()) {
-        return { cancelled: true };
+      if (isCancelled() || Date.now() - started >= budgetMs) {
+        break;
       }
     }
     try {
-      const [statsResp, booksResp] = await Promise.all([
-        request(`${API_BASE_URL}/library/stats`),
-        request(`${API_BASE_URL}/library/books?limit=50`),
-      ]);
+      const booksResp = await request(`${API_BASE_URL}/library/books?limit=50`);
       if (booksResp.status === 401) {
         return { error: 'Your session is unavailable. Please sign in again.' };
       }
       if (booksResp.ok) {
         const payload = await booksResp.json();
         let stats = null;
-        if (statsResp.ok) {
-          const statsPayload = await statsResp.json();
-          stats = statsPayload.data || null;
+        try {
+          const statsResp = await request(`${API_BASE_URL}/library/stats`);
+          if (statsResp.ok) {
+            const statsPayload = await statsResp.json();
+            stats = statsPayload.data || null;
+          }
+        } catch (statsError) {
+          stats = null;
         }
         return { books: payload.data || [], stats, error: '' };
       }
@@ -320,13 +322,14 @@ export async function loadLibrary(token, options = {}) {
       }
       sawAsleep = true;
     } catch (loadError) {
+      if (isCancelled()) {
+        return { cancelled: true };
+      }
       sawAsleep = true;
     }
   }
   return {
-    error: sawAsleep
-      ? 'The library is still starting. Press Retry to keep waiting.'
-      : 'Could not load your books.',
+    error: 'The library is still starting. Press Retry to keep waiting.',
   };
 }
 
@@ -354,7 +357,7 @@ const UserDashboard = ({
     }
     setLoading(true);
     setError('');
-    setStatusNote('');
+    setStatusNote('The library is starting. This can take up to three minutes.');
     const result = await loadLibrary(token, {
       isCancelled,
       onWaking: () => {

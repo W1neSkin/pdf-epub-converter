@@ -110,7 +110,8 @@ test('keeps asking until a sleeping library answers', async () => {
   const result = await loadLibrary('token', {
     fetchImpl,
     pause: async () => {},
-    attempts: 4,
+    budgetMs: 60000,
+    timeoutMs: 1000,
   });
 
   expect(result.error).toBe('');
