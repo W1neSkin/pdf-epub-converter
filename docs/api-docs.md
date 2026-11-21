@@ -132,7 +132,9 @@ GET /health
 
 `status` is `healthy` when every dependency returns HTTP 200, otherwise `degraded`.
 
-The gateway calls `GET /health` on each service, then `GET /` if that call is not 200 or errors (404, 429, 502/503, timeout). A trailing slash on the service URL is removed first. Failure values keep `unhealthy` or `unavailable` and append the status code or exception type:
+The gateway calls `GET /health` on each service, then `GET /` when that route is missing (404) or the request errors. A 429 is not retried on the other path: it is Cloudflare or Render limiting this caller, and a second request keeps the limit in place. A trailing slash on the service URL is removed first. Probe results are cached for a short time so Render's frequent liveness checks do not fan out on every poll. Render's own check of this gateway is `GET /`, which does not call the other services.
+
+Failure values keep `unhealthy` or `unavailable` and append the status code or exception type. A Cloudflare block adds `cloudflare-challenge`:
 
 ```json
 {
@@ -140,7 +142,7 @@ The gateway calls `GET /health` on each service, then `GET /` if that call is no
   "status": "degraded",
   "dependencies": {
     "auth": "healthy",
-    "converter": "unhealthy:GET /health HTTP 429; GET / HTTP 502",
+    "converter": "unhealthy:GET /health HTTP 429 cloudflare-challenge",
     "library": "healthy"
   }
 }

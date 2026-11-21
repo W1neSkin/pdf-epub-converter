@@ -79,20 +79,32 @@ def test_normalize_service_base_url_strips_trailing_slash():
     assert gateway.normalize_service_base_url("  https://converter.example///  ") == "https://converter.example"
 
 
-def test_probe_falls_back_when_health_is_not_200():
-    """404, 429, and 502 used to skip the root check or hide the status code."""
+def test_missing_health_route_falls_back_to_root():
+    """An older converter only answers `/`. A 404 is the missing-route signal."""
     seen = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request.url.path)
         if request.url.path == "/health":
-            return httpx.Response(429)
-        assert request.url.path == "/"
+            return httpx.Response(404)
         return httpx.Response(200, json={"status": "healthy"})
 
     status = _probe("https://converter.example/", handler)
     assert status == "healthy"
     assert seen == ["/health", "/"]
+
+
+def test_429_does_not_probe_the_other_path():
+    """A Cloudflare 429 is this caller being limited. A second GET keeps it going."""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(429, headers={"cf-mitigated": "challenge"})
+
+    status = _probe("https://converter.example/", handler)
+    assert status == "unhealthy:GET /health HTTP 429 cloudflare-challenge"
+    assert seen == ["/health"]
 
 
 def test_probe_reports_both_status_codes_when_fallback_fails():
@@ -137,13 +149,12 @@ def test_missing_service_url_is_unavailable_without_a_request():
 
 def test_gateway_health_stays_degraded_and_names_the_failure(monkeypatch):
     """Overall status remains healthy/degraded. The dependency string carries the cause."""
+    gateway._probe_cache.clear()
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host != "converter.example":
             return httpx.Response(200)
-        if request.url.path == "/health":
-            return httpx.Response(429)
-        return httpx.Response(502)
+        return httpx.Response(429, headers={"cf-mitigated": "challenge"})
 
     async def run():
         transport = httpx.MockTransport(handler)
@@ -161,8 +172,56 @@ def test_gateway_health_stays_degraded_and_names_the_failure(monkeypatch):
             return await gateway.detailed_health_check()
 
     result = asyncio.run(run())
+    gateway._probe_cache.clear()
     assert result.status == "degraded"
     assert result.service_name == "api-gateway"
     assert result.dependencies["auth"] == "healthy"
     assert result.dependencies["library"] == "healthy"
-    assert result.dependencies["converter"] == "unhealthy:GET /health HTTP 429; GET / HTTP 502"
+    assert result.dependencies["converter"] == "unhealthy:GET /health HTTP 429 cloudflare-challenge"
+
+
+def test_converter_health_proxy_falls_back_on_404_only(monkeypatch):
+    """`/converter/health` tries `/health`, then `/` when that route is absent."""
+
+    async def fake_forward(service_name, path, request, user=None, timeout=None):
+        code = 404 if path == "/health" else 200
+        return gateway.Response(content=b"{}", status_code=code, media_type="application/json")
+
+    monkeypatch.setattr(gateway, "forward_request", fake_forward)
+    response = asyncio.run(gateway.converter_health(None))
+    assert response.status_code == 200
+
+    calls = []
+
+    async def only_health(service_name, path, request, user=None, timeout=None):
+        calls.append(path)
+        return gateway.Response(content=b"limited", status_code=429)
+
+    monkeypatch.setattr(gateway, "forward_request", only_health)
+    limited = asyncio.run(gateway.converter_health(None))
+    assert calls == ["/health"]
+    assert limited.status_code == 429
+
+
+def test_probe_cache_stops_a_second_call(monkeypatch):
+    """Repeated polls within the cache window must not hit the converter again."""
+    gateway._probe_cache.clear()
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(200)
+
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            monkeypatch.setattr(gateway, "http_client", client)
+            monkeypatch.setattr(gateway, "PROBE_CACHE_SECONDS", 30)
+            first = await gateway.probe_service("https://cache.example")
+            second = await gateway.probe_service("https://cache.example")
+            return first, second
+
+    first, second = asyncio.run(run())
+    gateway._probe_cache.clear()
+    assert first == second == "healthy"
+    assert seen == ["/health"]
