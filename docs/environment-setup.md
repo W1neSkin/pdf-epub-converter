@@ -193,6 +193,9 @@ curl https://pdf-converter-auth-service.onrender.com/health
   "database_connected": true,
   "dependencies": {"supabase": "connected"}
 }
+
+# Converter (Render probes `/`; `/health` matches the shape above)
+curl https://pdf-epub-converter-api.onrender.com/health
 ```
 
 ### **Common Configuration Issues**

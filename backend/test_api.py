@@ -17,13 +17,21 @@ def test_api(base_url, name):
     """Test the API endpoints"""
     print(f"\n🧪 Testing {name} API: {base_url}")
     
-    # Test 1: Health check
+    # Test 1: Health checks. `/` is Render's probe. `/health` matches auth and library.
     try:
         response = requests.get(f"{base_url}/")
-        if response.status_code == 200:
+        detailed = requests.get(f"{base_url}/health")
+        detailed_ok = (
+            detailed.status_code == 200
+            and detailed.json().get("status") == "healthy"
+        )
+        if response.status_code == 200 and detailed_ok:
             print("✅ Health check passed")
         else:
-            print(f"❌ Health check failed: {response.status_code}")
+            print(
+                f"❌ Health check failed: / {response.status_code}, "
+                f"/health {detailed.status_code}"
+            )
             return False
     except Exception as e:
         print(f"❌ Health check failed: {e}")

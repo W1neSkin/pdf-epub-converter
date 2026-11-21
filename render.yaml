@@ -15,5 +15,6 @@ services:
         sync: false
       - key: LIBRARY_SERVICE_URL
         value: https://pdf-converter-library-service.onrender.com
+    # Render probes `/`. The gateway also probes `/health`; both return 200.
     healthCheckPath: /
     autoDeploy: true 

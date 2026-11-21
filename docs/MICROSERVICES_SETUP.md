@@ -240,6 +240,9 @@ curl https://pdf-api-gateway.onrender.com/health
 # Individual service health
 curl https://pdf-auth-service.onrender.com/health
 curl https://pdf-library-service.onrender.com/health
+# Converter keeps `/` for Render and `/health` for the gateway.
+curl https://pdf-epub-converter-api.onrender.com/
+curl https://pdf-epub-converter-api.onrender.com/health
 ```
 
 ### Database Monitoring

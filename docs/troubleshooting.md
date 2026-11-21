@@ -115,8 +115,10 @@ JWT_SECRET=your-jwt-secret-here
 
 #### **Problem**: Service dependencies unhealthy
 ```json
-{"dependencies":{"auth":"healthy","converter":"unhealthy","library":"healthy"}}
+{"status":"degraded","dependencies":{"auth":"healthy","converter":"unhealthy:GET /health HTTP 502; GET / HTTP 503","library":"healthy"}}
 ```
+
+The text after `unhealthy:` or `unavailable:` is the HTTP status or exception type. The gateway probes `GET /health`, then `GET /` when the first response is not 200 or the request fails. A trailing slash on the service URL is ignored.
 
 #### **Solution**: Update Service URLs
 ```bash
@@ -124,6 +126,10 @@ JWT_SECRET=your-jwt-secret-here
 AUTH_SERVICE_URL=https://pdf-converter-auth-service.onrender.com
 CONVERTER_SERVICE_URL=https://pdf-epub-converter-api.onrender.com  
 LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com
+
+# Converter answers both paths. Render uses `/`. The gateway uses `/health`.
+curl https://pdf-epub-converter-api.onrender.com/
+curl https://pdf-epub-converter-api.onrender.com/health
 ```
 
 ## 📱 **Frontend Issues**
@@ -220,6 +226,8 @@ curl https://your-service.onrender.com/health
 # Test each service individually
 curl https://pdf-converter-auth-service.onrender.com/health
 curl https://pdf-converter-library-service.onrender.com/health
+curl https://pdf-epub-converter-api.onrender.com/health
+curl https://pdf-epub-converter-api.onrender.com/
 curl https://pdf-converter-api-gateway.onrender.com/health
 ```
 
