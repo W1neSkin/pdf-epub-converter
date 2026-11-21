@@ -118,7 +118,9 @@ JWT_SECRET=your-jwt-secret-here
 {"status":"degraded","dependencies":{"auth":"healthy","converter":"unhealthy:GET /health HTTP 502; GET / HTTP 503","library":"healthy"}}
 ```
 
-The text after `unhealthy:` or `unavailable:` is the HTTP status or exception type. The gateway probes `GET /health`, then `GET /` when the first response is not 200 or the request fails. A trailing slash on the service URL is ignored.
+The text after `unhealthy:` or `unavailable:` is the HTTP status or exception type. `cloudflare-challenge` means the 429 was Cloudflare's edge page (`cf-mitigated: challenge`), not a limit in the converter. Direct browser calls can still return 200 while the gateway's IP is challenged. The gateway does not call `/` after a 429, and it caches probe results so a health poll does not hammer the converter. Render's health check for the gateway is `GET /`.
+
+A lasting `cloudflare-challenge` is Render/Cloudflare configuration, not an app limiter. Free web services cannot receive private-network traffic, so the gateway uses the public `onrender.com` URL. Raising that free-tier inbound limit is a Render support change.
 
 #### **Solution**: Update Service URLs
 ```bash

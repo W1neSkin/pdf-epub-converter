@@ -8,7 +8,8 @@ import os
 import sys
 import logging
 import asyncio
-from typing import Optional, Dict, Any
+import time
+from typing import Optional, Dict, Any, Tuple
 import httpx
 from datetime import datetime
 
@@ -287,6 +288,11 @@ async def forward_request(
 
 # One slow dependency must not hold the whole gateway health response open.
 HEALTH_PROBE_TIMEOUT = 5.0
+# Render polls a web service about every 5 seconds. Without a cache, each
+# poll of this gateway's /health is another call from one IP to the converter,
+# which Cloudflare then answers with a 429 challenge.
+PROBE_CACHE_SECONDS = float(os.getenv("HEALTH_PROBE_CACHE_SECONDS", "20"))
+_probe_cache: Dict[str, Tuple[float, str]] = {}
 
 
 def normalize_service_base_url(service_url: str) -> str:
@@ -299,23 +305,43 @@ def normalize_service_base_url(service_url: str) -> str:
     return (service_url or "").strip().rstrip("/")
 
 
+def _http_failure_label(response: httpx.Response) -> str:
+    """Status code, and a mark when Cloudflare issued the 429 challenge page."""
+    label = f"HTTP {response.status_code}"
+    # cf-mitigated: challenge is Cloudflare's bot/DDoS page, not our app.
+    if response.headers.get("cf-mitigated"):
+        label += " cloudflare-challenge"
+    return label
+
+
 async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = None) -> str:
     """Return ``healthy`` or a diagnosable ``unhealthy`` / ``unavailable`` string.
 
-    ``GET /health`` is the shared check (auth, library, and now the converter).
-    Any non-200 is not the final answer: Render cold starts answer 502/503,
-    Cloudflare and Render hibernate can answer 429, and an older converter
-    only implements ``GET /``. Those cases fall back to ``GET /``.
+    ``GET /health`` is the shared check. A missing route (404) or a connection
+    error falls back to ``GET /``. A 429 does not: that response is Cloudflare
+    or Render telling this caller to stop, and a second path is the same caller.
 
-    Failure strings keep the old word and append what failed, for example
-    ``unhealthy:GET /health HTTP 429; GET / HTTP 502`` or
-    ``unavailable:GET /health TimeoutException``.
+    Results for the shared client are cached so a 5-second platform poll does
+    not stampede the converter. Callers that pass a client always probe fresh.
     """
     base = normalize_service_base_url(service_url)
     if not base:
         return "unavailable:MissingServiceUrl"
 
-    http = client or http_client
+    now = time.monotonic()
+    if client is None:
+        cached = _probe_cache.get(base)
+        if cached and now - cached[0] < PROBE_CACHE_SECONDS:
+            return cached[1]
+
+    result = await _probe_service_once(base, client or http_client)
+    if client is None:
+        _probe_cache[base] = (now, result)
+    return result
+
+
+async def _probe_service_once(base: str, http: httpx.AsyncClient) -> str:
+    """Probe one base URL. 429 stops the loop; other failures try `/`."""
     attempts = []
     saw_http = False
 
@@ -332,7 +358,10 @@ async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = 
             return "healthy"
 
         saw_http = True
-        attempts.append(f"GET {path} HTTP {response.status_code}")
+        attempts.append(f"GET {path} {_http_failure_label(response)}")
+        # Same source IP, same edge limit. Another GET would keep the 429 going.
+        if response.status_code == 429:
+            break
 
     # An HTTP status means the host answered. No response at all is unavailable.
     kind = "unhealthy" if saw_http else "unavailable"
@@ -444,8 +473,15 @@ async def library_proxy(path: str, request: Request, user: Dict[str, Any] = Depe
 # Converter service health check. `/` on the converter stays the Render probe.
 @app.get("/converter/health")
 async def converter_health(request: Request):
-    """Proxy the converter's `/health` check (same path as auth and library)."""
-    return await forward_request("converter", "/health", request)
+    """Proxy `/health`, then `/` if this converter build does not have that route.
+
+    A 429 is returned as-is. Falling through to `/` would be a second request
+    from the same caller that Cloudflare is already limiting.
+    """
+    response = await forward_request("converter", "/health", request)
+    if response.status_code == 404:
+        return await forward_request("converter", "/", request)
+    return response
 
 # Error handlers
 @app.exception_handler(HTTPException)
