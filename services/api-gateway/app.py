@@ -8,7 +8,8 @@ import os
 import sys
 import logging
 import asyncio
-from typing import Optional, Dict, Any
+import time
+from typing import Optional, Dict, Any, Tuple
 import httpx
 from datetime import datetime
 
@@ -287,6 +288,15 @@ async def forward_request(
 
 # One slow dependency must not hold the whole gateway health response open.
 HEALTH_PROBE_TIMEOUT = 5.0
+# Render calls this service's health path every few seconds. Reusing a probe
+# keeps that from turning into a request to the converter on every check.
+# 20s is long enough to ride out a wake-up burst and short enough that a
+# real outage still shows up on the next look.
+HEALTH_PROBE_CACHE_SECONDS = 20.0
+# base URL -> (monotonic time, probe result)
+_health_probe_cache: Dict[str, Tuple[float, str]] = {}
+# One in-flight probe per process. Parallel /health calls must not stampede.
+_health_probe_lock = asyncio.Lock()
 
 
 def normalize_service_base_url(service_url: str) -> str:
@@ -299,16 +309,57 @@ def normalize_service_base_url(service_url: str) -> str:
     return (service_url or "").strip().rstrip("/")
 
 
+def describe_probe_http(path: str, response: httpx.Response) -> str:
+    """One failed attempt, plus the header that says who produced a 429.
+
+    ``x-render-routing: hibernate-rate-limited`` is Render's edge while a
+    free instance is waking up. That response never reaches the app, so it
+    has no ``x-render-origin-server``. A 429 from our own code (the public
+    conversion cap) does reach uvicorn and sets that header. The cap is not
+    applied to ``/`` or ``/health``.
+    """
+    text = f"GET {path} HTTP {response.status_code}"
+    routing = (response.headers.get("x-render-routing") or "").strip()
+    if routing:
+        return f"{text} {routing}"
+    if response.headers.get("x-render-origin-server"):
+        return f"{text} from-app"
+    return text
+
+
+def clear_health_probe_cache() -> None:
+    """Drop cached probes. Tests call this so one case cannot satisfy the next."""
+    _health_probe_cache.clear()
+
+
+def _cached_probe_result(base: str) -> Optional[str]:
+    cached = _health_probe_cache.get(base)
+    if not cached:
+        return None
+    probed_at, result = cached
+    if time.monotonic() - probed_at >= HEALTH_PROBE_CACHE_SECONDS:
+        return None
+    return result
+
+
 async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = None) -> str:
     """Return ``healthy`` or a diagnosable ``unhealthy`` / ``unavailable`` string.
 
-    ``GET /health`` is the shared check (auth, library, and now the converter).
-    Any non-200 is not the final answer: Render cold starts answer 502/503,
-    Cloudflare and Render hibernate can answer 429, and an older converter
-    only implements ``GET /``. Those cases fall back to ``GET /``.
+    ``GET /health`` is the shared check (auth, library, and the converter).
+    A 404 or a 5xx falls back to ``GET /``: an older converter only implements
+    ``/``, and a cold start often answers 502/503 on the first try.
+
+    A 429 does not fall back. Render's free tier returns 429 for the caller,
+    not for one path (``hibernate-rate-limited`` while the instance wakes, or
+    the lower inbound limit once that caller has sent too many requests).
+    ``GET /`` from the same caller gets the same 429, and the extra request
+    is what keeps the limit open. Direct calls from another address can still
+    be 200. User-facing proxy calls already wait 6 seconds between hibernate
+    retries. This probe must not fire a second request immediately.
 
     Failure strings keep the old word and append what failed, for example
-    ``unhealthy:GET /health HTTP 429; GET / HTTP 502`` or
+    ``unhealthy:GET /health HTTP 429 hibernate-rate-limited`` or
+    ``unhealthy:GET /health HTTP 502; GET / HTTP 503`` or
     ``unavailable:GET /health TimeoutException``.
     """
     base = normalize_service_base_url(service_url)
@@ -332,11 +383,38 @@ async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = 
             return "healthy"
 
         saw_http = True
-        attempts.append(f"GET {path} HTTP {response.status_code}")
+        attempts.append(describe_probe_http(path, response))
+        if response.status_code == 429:
+            break
 
     # An HTTP status means the host answered. No response at all is unavailable.
     kind = "unhealthy" if saw_http else "unavailable"
     return f"{kind}:{'; '.join(attempts)}"
+
+
+async def cached_probe_service(service_url: str) -> str:
+    """Probe once, then reuse that result for ``HEALTH_PROBE_CACHE_SECONDS``.
+
+    Render's HTTP health check calls this process every few seconds. When
+    that path is ``/health``, each call used to request the converter's
+    public URL. Those calls all share the gateway's outbound address. On a
+    free service Render rate-limits that address, so the gateway sees 429
+    while a browser still gets 200. Reusing the last probe, and sharing one
+    in-flight probe across overlapping ``/health`` calls, stops that burst.
+    """
+    base = normalize_service_base_url(service_url)
+    cached = _cached_probe_result(base)
+    if cached is not None:
+        return cached
+
+    async with _health_probe_lock:
+        cached = _cached_probe_result(base)
+        if cached is not None:
+            return cached
+        result = await probe_service(base)
+        if base:
+            _health_probe_cache[base] = (time.monotonic(), result)
+        return result
 
 
 # Routes
@@ -362,7 +440,7 @@ async def detailed_health_check():
     service_status = {}
 
     for service_name, service_url in SERVICES.items():
-        result = await probe_service(service_url)
+        result = await cached_probe_service(service_url)
         if result != "healthy":
             logger.warning(
                 "Health probe for %s (%s) returned %s",

@@ -132,7 +132,7 @@ GET /health
 
 `status` is `healthy` when every dependency returns HTTP 200, otherwise `degraded`.
 
-The gateway calls `GET /health` on each service, then `GET /` if that call is not 200 or errors (404, 429, 502/503, timeout). A trailing slash on the service URL is removed first. Failure values keep `unhealthy` or `unavailable` and append the status code or exception type:
+The gateway calls `GET /health` on each service, then `GET /` if that call is a 404, a 5xx, or a connection error. A 429 is reported as-is and is not followed by a second request. Results are reused for 20 seconds so Render's own health checks do not call the converter on every probe. A trailing slash on the service URL is removed first. Failure values keep `unhealthy` or `unavailable` and append the status code, `x-render-routing` when Render set it, or the exception type:
 
 ```json
 {
@@ -140,7 +140,7 @@ The gateway calls `GET /health` on each service, then `GET /` if that call is no
   "status": "degraded",
   "dependencies": {
     "auth": "healthy",
-    "converter": "unhealthy:GET /health HTTP 429; GET / HTTP 502",
+    "converter": "unhealthy:GET /health HTTP 429 hibernate-rate-limited",
     "library": "healthy"
   }
 }

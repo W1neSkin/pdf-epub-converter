@@ -79,20 +79,48 @@ def test_normalize_service_base_url_strips_trailing_slash():
     assert gateway.normalize_service_base_url("  https://converter.example///  ") == "https://converter.example"
 
 
-def test_probe_falls_back_when_health_is_not_200():
-    """404, 429, and 502 used to skip the root check or hide the status code."""
+def test_probe_falls_back_when_health_is_missing():
+    """A 404 still means the route is absent, so ``/`` is the real check."""
     seen = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request.url.path)
         if request.url.path == "/health":
-            return httpx.Response(429)
+            return httpx.Response(404)
         assert request.url.path == "/"
         return httpx.Response(200, json={"status": "healthy"})
 
     status = _probe("https://converter.example/", handler)
     assert status == "healthy"
     assert seen == ["/health", "/"]
+
+
+def test_probe_does_not_follow_a_rate_limit():
+    """A 429 is the caller being limited, not a missing path.
+
+    Requesting ``/`` immediately is a second hit from the same address and
+    keeps Render's free-tier limit open. The routing header is kept so a
+    wake-up 429 is visible without another request.
+    """
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(429, headers={"x-render-routing": "hibernate-rate-limited"})
+
+    status = _probe("https://converter.example/", handler)
+    assert status == "unhealthy:GET /health HTTP 429 hibernate-rate-limited"
+    assert seen == ["/health"]
+
+
+def test_probe_marks_an_application_429():
+    """A 429 that reached uvicorn is the app, not Render's edge."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"x-render-origin-server": "uvicorn"})
+
+    status = _probe("https://converter.example", handler)
+    assert status == "unhealthy:GET /health HTTP 429 from-app"
 
 
 def test_probe_reports_both_status_codes_when_fallback_fails():
@@ -135,15 +163,8 @@ def test_missing_service_url_is_unavailable_without_a_request():
     assert asyncio.run(gateway.probe_service("  ")) == "unavailable:MissingServiceUrl"
 
 
-def test_gateway_health_stays_degraded_and_names_the_failure(monkeypatch):
-    """Overall status remains healthy/degraded. The dependency string carries the cause."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.host != "converter.example":
-            return httpx.Response(200)
-        if request.url.path == "/health":
-            return httpx.Response(429)
-        return httpx.Response(502)
+def _gateway_health(monkeypatch, handler):
+    gateway.clear_health_probe_cache()
 
     async def run():
         transport = httpx.MockTransport(handler)
@@ -160,9 +181,86 @@ def test_gateway_health_stays_degraded_and_names_the_failure(monkeypatch):
             )
             return await gateway.detailed_health_check()
 
-    result = asyncio.run(run())
+    return asyncio.run(run())
+
+
+def test_gateway_health_stays_degraded_and_names_the_failure(monkeypatch):
+    """Overall status remains healthy/degraded. A 429 does not cause a second GET."""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.host, request.url.path))
+        if request.url.host != "converter.example":
+            return httpx.Response(200)
+        return httpx.Response(429)
+
+    result = _gateway_health(monkeypatch, handler)
     assert result.status == "degraded"
     assert result.service_name == "api-gateway"
     assert result.dependencies["auth"] == "healthy"
     assert result.dependencies["library"] == "healthy"
-    assert result.dependencies["converter"] == "unhealthy:GET /health HTTP 429; GET / HTTP 502"
+    assert result.dependencies["converter"] == "unhealthy:GET /health HTTP 429"
+    assert ("converter.example", "/") not in seen
+
+
+def test_detailed_health_reuses_a_recent_probe(monkeypatch):
+    """Two quick /health calls must not hit the converter twice."""
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(200)
+
+    async def run():
+        gateway.clear_health_probe_cache()
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            monkeypatch.setattr(gateway, "http_client", client)
+            monkeypatch.setattr(
+                gateway,
+                "SERVICES",
+                {
+                    "auth": "https://auth.example",
+                    "converter": "https://converter.example",
+                    "library": "https://library.example",
+                },
+            )
+            first = await gateway.detailed_health_check()
+            second = await gateway.detailed_health_check()
+            return first, second
+
+    first, second = asyncio.run(run())
+    assert first.status == "healthy"
+    assert second.status == "healthy"
+    # Three services once. The second check is served from the cache.
+    assert calls["n"] == 3
+
+
+def test_detailed_health_probes_again_after_the_cache_window(monkeypatch):
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(200)
+
+    monkeypatch.setattr(gateway, "HEALTH_PROBE_CACHE_SECONDS", 0)
+
+    async def run():
+        gateway.clear_health_probe_cache()
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            monkeypatch.setattr(gateway, "http_client", client)
+            monkeypatch.setattr(
+                gateway,
+                "SERVICES",
+                {
+                    "auth": "https://auth.example",
+                    "converter": "https://converter.example",
+                    "library": "https://library.example",
+                },
+            )
+            await gateway.detailed_health_check()
+            await gateway.detailed_health_check()
+
+    asyncio.run(run())
+    assert calls["n"] == 6
