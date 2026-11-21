@@ -117,6 +117,8 @@ Service ice   Service
 4. **Advanced Settings**:
    - Auto-Deploy: Yes
    - Build Filter: `services/api-gateway/**` or `shared/**`
+   - Health Check Path: `/`
+     Render calls this every few seconds. `/` only checks that the gateway process is up. Do not point it at `/health`. That path also calls auth, library, and the converter, and those extra calls make Render return 429 to the gateway.
 
 5. **Deploy and save URL**: `https://pdf-converter-api-gateway.onrender.com`
 

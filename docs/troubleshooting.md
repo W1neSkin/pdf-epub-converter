@@ -118,7 +118,21 @@ JWT_SECRET=your-jwt-secret-here
 {"status":"degraded","dependencies":{"auth":"healthy","converter":"unhealthy:GET /health HTTP 502; GET / HTTP 503","library":"healthy"}}
 ```
 
-The text after `unhealthy:` or `unavailable:` is the HTTP status or exception type. The gateway probes `GET /health`, then `GET /` when the first response is not 200 or the request fails. A trailing slash on the service URL is ignored.
+The text after `unhealthy:` or `unavailable:` is the HTTP status or exception type. The gateway probes `GET /health`, then `GET /` when that call is a 404, a 5xx, or a connection error. A trailing slash on the service URL is ignored. A 429 is not followed by a second request.
+
+#### **Problem**: Converter is HTTP 429 from the gateway and HTTP 200 from outside
+```json
+{"status":"degraded","dependencies":{"auth":"healthy","converter":"unhealthy:GET /health HTTP 429 hibernate-rate-limited","library":"healthy"}}
+```
+
+The converter does not rate-limit `GET /` or `GET /health`. The only application 429 is the public conversion cap, and that route is not part of the health check. A 429 here is Render's edge on the public `onrender.com` URL. `hibernate-rate-limited` means the free instance is waking up and this caller sent another request too soon. A 429 with no `x-render-routing` value is Render's inbound limit for that caller (much lower on the free plan). `from-app` means the request reached uvicorn.
+
+The gateway, Render's health check of the gateway, and every proxied API call leave from the same address. Render counts them together. A direct `curl` from another address can still return 200 in a fraction of a second. Auth and library stay healthy because they answer the first probe and were not the service absorbing the extra calls.
+
+Requests the gateway proxies to the converter (`/api/convert`, `/api/public/*`, `/api/status`, `/api/download`) use that same address, so they can receive the same 429 during the window. The website uploader does not. It calls `https://pdf-epub-scan.onrender.com` directly.
+
+#### **Solution**: Less traffic from the gateway, not a converter limiter change
+The gateway reuses each dependency probe for 20 seconds, and it does not send `GET /` after a 429. Render's own health check path for the gateway should be `/` (a local 200). `/health` remains the detailed check for operators. No Render dashboard setting has to change for the probe fix to apply. If the blueprint is synced, `services/api-gateway/render.yaml` sets the health check path to `/`.
 
 #### **Solution**: Update Service URLs
 ```bash
