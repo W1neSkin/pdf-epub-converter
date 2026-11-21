@@ -164,7 +164,8 @@ async def forward_request(
             detail=f"Service {service_name} not found"
         )
     
-    # Build target URL
+    # A trailing slash on the env URL would turn "/health" into "//health".
+    service_url = normalize_service_base_url(service_url)
     target_url = f"{service_url}{path}"
     
     # Prepare headers
@@ -284,6 +285,60 @@ async def forward_request(
             detail=f"Service {service_name} unavailable"
         )
 
+# One slow dependency must not hold the whole gateway health response open.
+HEALTH_PROBE_TIMEOUT = 5.0
+
+
+def normalize_service_base_url(service_url: str) -> str:
+    """Drop whitespace and a trailing slash before appending a path.
+
+    ``CONVERTER_SERVICE_URL`` is sometimes saved with a trailing slash.
+    ``{url}/health`` would then request ``//health``, which is a different
+    path and can 404 even when the service is up.
+    """
+    return (service_url or "").strip().rstrip("/")
+
+
+async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = None) -> str:
+    """Return ``healthy`` or a diagnosable ``unhealthy`` / ``unavailable`` string.
+
+    ``GET /health`` is the shared check (auth, library, and now the converter).
+    Any non-200 is not the final answer: Render cold starts answer 502/503,
+    Cloudflare and Render hibernate can answer 429, and an older converter
+    only implements ``GET /``. Those cases fall back to ``GET /``.
+
+    Failure strings keep the old word and append what failed, for example
+    ``unhealthy:GET /health HTTP 429; GET / HTTP 502`` or
+    ``unavailable:GET /health TimeoutException``.
+    """
+    base = normalize_service_base_url(service_url)
+    if not base:
+        return "unavailable:MissingServiceUrl"
+
+    http = client or http_client
+    attempts = []
+    saw_http = False
+
+    for path in ("/health", "/"):
+        try:
+            response = await http.get(f"{base}{path}", timeout=HEALTH_PROBE_TIMEOUT)
+        except Exception as exc:
+            # Still try `/`. A timeout on `/health` during wake-up often
+            # clears by the time the root path is requested.
+            attempts.append(f"GET {path} {type(exc).__name__}")
+            continue
+
+        if response.status_code == 200:
+            return "healthy"
+
+        saw_http = True
+        attempts.append(f"GET {path} HTTP {response.status_code}")
+
+    # An HTTP status means the host answered. No response at all is unavailable.
+    kind = "unhealthy" if saw_http else "unavailable"
+    return f"{kind}:{'; '.join(attempts)}"
+
+
 # Routes
 
 @app.get("/", response_model=Dict[str, str])
@@ -298,20 +353,27 @@ async def health_check():
 
 @app.get("/health", response_model=HealthCheck)
 async def detailed_health_check():
-    """Detailed health check with service dependencies"""
+    """Detailed health check with service dependencies.
+
+    Overall ``status`` stays ``healthy`` or ``degraded``. Each dependency is
+    ``healthy``, or ``unhealthy`` / ``unavailable`` plus the status code or
+    exception type from the probe.
+    """
     service_status = {}
-    
+
     for service_name, service_url in SERVICES.items():
-        try:
-            response = await http_client.get(f"{service_url}/health", timeout=5.0)
-            if response.status_code == 404:
-                response = await http_client.get(f"{service_url}/", timeout=5.0)
-            service_status[service_name] = "healthy" if response.status_code == 200 else "unhealthy"
-        except Exception:
-            service_status[service_name] = "unavailable"
-    
+        result = await probe_service(service_url)
+        if result != "healthy":
+            logger.warning(
+                "Health probe for %s (%s) returned %s",
+                service_name,
+                service_url,
+                result,
+            )
+        service_status[service_name] = result
+
     all_healthy = all(status == "healthy" for status in service_status.values())
-    
+
     return HealthCheck(
         service_name="api-gateway",
         status="healthy" if all_healthy else "degraded",
@@ -379,11 +441,11 @@ async def library_proxy(path: str, request: Request, user: Dict[str, Any] = Depe
     """Proxy requests to library service (auth required)"""
     return await forward_request("library", f"/library/{path}", request, user)
 
-# Converter service health check
+# Converter service health check. `/` on the converter stays the Render probe.
 @app.get("/converter/health")
 async def converter_health(request: Request):
-    """Check converter service health"""
-    return await forward_request("converter", "/", request)
+    """Proxy the converter's `/health` check (same path as auth and library)."""
+    return await forward_request("converter", "/health", request)
 
 # Error handlers
 @app.exception_handler(HTTPException)

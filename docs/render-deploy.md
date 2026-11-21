@@ -150,7 +150,9 @@ curl https://pdf-converter-library-service.onrender.com/health
 curl https://pdf-converter-api-gateway.onrender.com/health
 
 # Test Converter Service
+# `/` is Render's healthCheckPath. `/health` matches auth and library.
 curl https://pdf-epub-converter-api.onrender.com/
+curl https://pdf-epub-converter-api.onrender.com/health
 ```
 
 ### Authentication Flow

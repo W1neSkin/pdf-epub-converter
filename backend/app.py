@@ -6,6 +6,7 @@ import os
 import uuid
 import shutil
 from typing import Dict, Any, Optional
+from datetime import datetime
 import logging
 import jwt
 from PyPDF2 import PdfReader
@@ -98,6 +99,20 @@ class HealthResponse(BaseModel):
     service: str
     version: str
 
+
+class ServiceHealthCheck(BaseModel):
+    """Same fields as shared.models.HealthCheck used by auth and library.
+
+    The converter image is built from the backend directory only, so this
+    model lives here instead of importing the shared package.
+    """
+    service_name: str
+    status: str
+    version: str
+    timestamp: datetime
+    database_connected: bool
+    dependencies: Dict[str, str] = {}
+
 app = FastAPI(
     title="PDF to EPUB Converter API",
     description="Convert PDF files to interactive EPUB with selectable text overlays",
@@ -161,11 +176,37 @@ def prepare_uploaded_pdf(file: UploadFile) -> tuple[str, str, int]:
 
 @app.get("/", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
-    """Health check endpoint"""
+    """Liveness check. Render's healthCheckPath for this service is `/`."""
     return HealthResponse(
         status="healthy",
         service="PDF to EPUB Converter API",
         version="1.0.0"
+    )
+
+
+@app.get("/health", response_model=ServiceHealthCheck)
+async def detailed_health_check() -> ServiceHealthCheck:
+    """Dependency check. The API gateway probes this path, same as auth and library.
+
+    `GET /` stays in place for Render. This route adds the shared health shape
+    so a missing `/health` is not reported as an unhealthy converter.
+    """
+    # Temp dirs are created at import. A missing dir means this instance cannot
+    # accept a conversion, which is the converter's equivalent of a down dependency.
+    uploads_ready = os.path.isdir(UPLOAD_FOLDER)
+    outputs_ready = os.path.isdir(OUTPUT_FOLDER)
+    ready = uploads_ready and outputs_ready
+    return ServiceHealthCheck(
+        service_name="converter-service",
+        status="healthy" if ready else "degraded",
+        version="1.0.0",
+        timestamp=datetime.utcnow(),
+        # The converter has no database. True means "not a failed connection".
+        database_connected=True,
+        dependencies={
+            "uploads": "ready" if uploads_ready else "missing",
+            "outputs": "ready" if outputs_ready else "missing",
+        },
     )
 
 @app.post("/api/convert", response_model=ConversionResponse)

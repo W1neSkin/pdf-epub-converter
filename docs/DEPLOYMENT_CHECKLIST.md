@@ -42,6 +42,9 @@
 curl https://pdf-converter-api-gateway.onrender.com/health
 curl https://pdf-converter-auth-service.onrender.com/health
 curl https://pdf-converter-library-service.onrender.com/health
+# Converter: Render probes `/`. The gateway probes `/health`. Both should be 200.
+curl https://pdf-epub-converter-api.onrender.com/
+curl https://pdf-epub-converter-api.onrender.com/health
 
 # Auth flow
 curl -X POST https://pdf-converter-api-gateway.onrender.com/auth/register \

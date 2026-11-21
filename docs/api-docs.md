@@ -130,12 +130,30 @@ Authorization: Bearer {token}
 GET /health
 ```
 
+`status` is `healthy` when every dependency returns HTTP 200, otherwise `degraded`.
+
+The gateway calls `GET /health` on each service, then `GET /` if that call is not 200 or errors (404, 429, 502/503, timeout). A trailing slash on the service URL is removed first. Failure values keep `unhealthy` or `unavailable` and append the status code or exception type:
+
+```json
+{
+  "service_name": "api-gateway",
+  "status": "degraded",
+  "dependencies": {
+    "auth": "healthy",
+    "converter": "unhealthy:GET /health HTTP 429; GET / HTTP 502",
+    "library": "healthy"
+  }
+}
+```
+
 ### **Service Health Checks**
 ```http
-GET /auth/health      # Auth service
-GET /library/health   # Library service  
-GET /converter/health # Converter service
+GET /auth/health       # Auth service
+GET /library/health    # Library service
+GET /converter/health  # Converter service (/health on the converter)
 ```
+
+The converter serves both `GET /` (Render `healthCheckPath`) and `GET /health` (same fields as auth and library: `service_name`, `status`, `version`, `timestamp`, `database_connected`, `dependencies`).
 
 ## 📊 **Response Formats**
 
