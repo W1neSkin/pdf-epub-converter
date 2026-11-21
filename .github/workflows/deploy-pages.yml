@@ -63,6 +63,9 @@ jobs:
         path: './frontend/build'
 
   deploy:
+    # Pull requests still build the site. Publishing is limited to master:
+    # the github-pages environment rejects refs/pull/*/merge.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
