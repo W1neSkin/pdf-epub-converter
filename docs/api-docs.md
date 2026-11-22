@@ -132,7 +132,7 @@ GET /health
 
 `status` is `healthy` when every dependency returns HTTP 200, otherwise `degraded`.
 
-The gateway calls `GET /health` on each service, then `GET /` if that call is a 404, a 5xx, or a connection error. A 429 is reported as-is and is not followed by a second request. A normal result is reused for 20 seconds. A 429 is reused for 90 seconds so a wake-up is not retried while Render or Cloudflare is still answering that caller with 429. The three probes run together and `/health` answers within 4 seconds. A trailing slash on the service URL is removed first. Failure values keep `unhealthy` or `unavailable` and append the status code, `x-render-routing` when Render set it, or the exception type:
+Auth and library are checked with `GET /health`, then `GET /` on a 404 or a 5xx. The converter is `pdf-epub-scan`, which has no `/health` route, so the gateway checks `GET /` only. A 429 is reported as-is and is not followed by another path. A normal result is reused for 20 seconds. A 429 is reused for 3 minutes. The failure text includes the host. The three probes run together and `/health` answers within 4 seconds. A trailing slash on the service URL is removed first. Failure values keep `unhealthy` or `unavailable` and append the status code, `x-render-routing` when Render set it, or the exception type:
 
 ```json
 {
@@ -140,7 +140,7 @@ The gateway calls `GET /health` on each service, then `GET /` if that call is a 
   "status": "degraded",
   "dependencies": {
     "auth": "healthy",
-    "converter": "unhealthy:GET /health HTTP 429 hibernate-rate-limited",
+    "converter": "unhealthy:GET pdf-epub-scan.onrender.com/ HTTP 429 hibernate-rate-limited",
     "library": "healthy"
   }
 }
@@ -150,10 +150,10 @@ The gateway calls `GET /health` on each service, then `GET /` if that call is a 
 ```http
 GET /auth/health       # Auth service
 GET /library/health    # Library service
-GET /converter/health  # Converter service (/health on the converter)
+GET /converter/health  # Converter service (scan's GET /, which returns 200)
 ```
 
-The converter serves both `GET /` (Render `healthCheckPath`) and `GET /health` (same fields as auth and library: `service_name`, `status`, `version`, `timestamp`, `database_connected`, `dependencies`).
+The gateway's converter is pdf-epub-scan. It serves `GET /` and has no `/health` route. The older Python service at pdf-epub-converter-api still serves both paths, and the gateway does not call it.
 
 ## 📊 **Response Formats**
 

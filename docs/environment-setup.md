@@ -67,7 +67,7 @@ JWT_SECRET=your-jwt-secret-here
 
 # Service URLs (update with your actual URLs)
 AUTH_SERVICE_URL=https://pdf-converter-auth-service.onrender.com
-CONVERTER_SERVICE_URL=https://pdf-epub-converter-api.onrender.com
+CONVERTER_SERVICE_URL=https://pdf-epub-scan.onrender.com
 LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com
 
 # Gateway Configuration
@@ -194,8 +194,8 @@ curl https://pdf-converter-auth-service.onrender.com/health
   "dependencies": {"supabase": "connected"}
 }
 
-# Converter (Render probes `/`; `/health` matches the shape above)
-curl https://pdf-epub-converter-api.onrender.com/health
+# Gateway converter target. Scan has no /health route; GET / returns 200.
+curl https://pdf-epub-scan.onrender.com/
 ```
 
 ### **Common Configuration Issues**
@@ -255,7 +255,7 @@ CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
 
 # Service URLs (update after deployment)
 AUTH_SERVICE_URL=https://pdf-converter-auth-service.onrender.com
-CONVERTER_SERVICE_URL=https://pdf-epub-converter-api.onrender.com
+CONVERTER_SERVICE_URL=https://pdf-epub-scan.onrender.com
 LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com
 
 # Frontend

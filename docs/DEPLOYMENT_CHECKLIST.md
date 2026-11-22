@@ -33,7 +33,7 @@
 - **API Gateway**: `https://pdf-converter-api-gateway.onrender.com`
 - **Auth Service**: `https://pdf-converter-auth-service.onrender.com`
 - **Library Service**: `https://pdf-converter-library-service.onrender.com`
-- **Converter Service**: `https://pdf-epub-converter-api.onrender.com` (existing)
+- **Converter Service** (gateway target, Tesseract): `https://pdf-epub-scan.onrender.com`
 
 ## 🧪 Quick Tests
 
@@ -42,9 +42,8 @@
 curl https://pdf-converter-api-gateway.onrender.com/health
 curl https://pdf-converter-auth-service.onrender.com/health
 curl https://pdf-converter-library-service.onrender.com/health
-# Converter: Render probes `/`. The gateway probes `/health`. Both should be 200.
-curl https://pdf-epub-converter-api.onrender.com/
-curl https://pdf-epub-converter-api.onrender.com/health
+# The gateway probes scan's GET /. That service has no /health route.
+curl https://pdf-epub-scan.onrender.com/
 
 # Auth flow
 curl -X POST https://pdf-converter-api-gateway.onrender.com/auth/register \

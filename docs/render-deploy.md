@@ -107,7 +107,7 @@ Service ice   Service
    ```
    JWT_SECRET=your-jwt-secret-here
    AUTH_SERVICE_URL=https://pdf-converter-auth-service.onrender.com
-   CONVERTER_SERVICE_URL=https://pdf-epub-converter-api.onrender.com
+   CONVERTER_SERVICE_URL=https://pdf-epub-scan.onrender.com
    LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com
    PORT=8080
    DEBUG=false
@@ -151,10 +151,8 @@ curl https://pdf-converter-library-service.onrender.com/health
 # Test API Gateway
 curl https://pdf-converter-api-gateway.onrender.com/health
 
-# Test Converter Service
-# `/` is Render's healthCheckPath. `/health` matches auth and library.
-curl https://pdf-epub-converter-api.onrender.com/
-curl https://pdf-epub-converter-api.onrender.com/health
+# Gateway converter target. Scan has no /health route; GET / returns 200.
+curl https://pdf-epub-scan.onrender.com/
 ```
 
 ### Authentication Flow

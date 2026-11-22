@@ -186,10 +186,11 @@ async def health_check() -> HealthResponse:
 
 @app.get("/health", response_model=ServiceHealthCheck)
 async def detailed_health_check() -> ServiceHealthCheck:
-    """Dependency check. The API gateway probes this path, same as auth and library.
+    """Dependency check for this Python service.
 
-    `GET /` stays in place for Render. This route adds the shared health shape
-    so a missing `/health` is not reported as an unhealthy converter.
+    `GET /` stays in place for Render. The gateway's converter target is
+    pdf-epub-scan, which has no `/health` route, so the gateway probes
+    scan's `GET /` instead of this path.
     """
     # Temp dirs are created at import. A missing dir means this instance cannot
     # accept a conversion, which is the converter's equivalent of a down dependency.
