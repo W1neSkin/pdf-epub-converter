@@ -236,6 +236,95 @@ def test_detailed_health_reuses_a_recent_probe(monkeypatch):
     assert calls["n"] == 3
 
 
+def test_probe_cache_ttl_backs_off_on_any_429():
+    """Both the hibernate 429 and a header-less 429 wait out the penalty."""
+    hibernate = "unhealthy:GET /health HTTP 429 hibernate-rate-limited"
+    bare = "unhealthy:GET /health HTTP 429"
+    assert gateway.probe_cache_ttl(hibernate) == gateway.RATE_LIMIT_PROBE_BACKOFF_SECONDS
+    assert gateway.probe_cache_ttl(bare) == gateway.RATE_LIMIT_PROBE_BACKOFF_SECONDS
+    assert gateway.probe_cache_ttl("healthy") == gateway.HEALTH_PROBE_CACHE_SECONDS
+    assert gateway.probe_cache_ttl("unhealthy:GET /health HTTP 502; GET / HTTP 503") == (
+        gateway.HEALTH_PROBE_CACHE_SECONDS
+    )
+
+
+def test_rate_limit_is_not_retried_on_the_short_cache_window(monkeypatch):
+    """A 429 must not be probed again just because the 20s cache has expired.
+
+    That retry is what kept auth, library, and the converter on
+    hibernate-rate-limited after they were already returning 200 elsewhere.
+    """
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(429, headers={"x-render-routing": "hibernate-rate-limited"})
+
+    monkeypatch.setattr(gateway, "HEALTH_PROBE_CACHE_SECONDS", 0)
+
+    async def run():
+        gateway.clear_health_probe_cache()
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            monkeypatch.setattr(gateway, "http_client", client)
+            monkeypatch.setattr(
+                gateway,
+                "SERVICES",
+                {
+                    "auth": "https://auth.example",
+                    "converter": "https://converter.example",
+                    "library": "https://library.example",
+                },
+            )
+            first = await gateway.detailed_health_check()
+            second = await gateway.detailed_health_check()
+            return first, second
+
+    first, second = asyncio.run(run())
+    assert first.status == "degraded"
+    assert second.status == "degraded"
+    for name in ("auth", "converter", "library"):
+        assert first.dependencies[name] == "unhealthy:GET /health HTTP 429 hibernate-rate-limited"
+        assert second.dependencies[name] == first.dependencies[name]
+    # One request per service. The second /health is served from the backoff.
+    assert calls["n"] == 3
+
+
+def test_rate_limit_is_probed_again_after_the_backoff(monkeypatch):
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] <= 3:
+            return httpx.Response(429)
+        return httpx.Response(200)
+
+    monkeypatch.setattr(gateway, "RATE_LIMIT_PROBE_BACKOFF_SECONDS", 0)
+
+    async def run():
+        gateway.clear_health_probe_cache()
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            monkeypatch.setattr(gateway, "http_client", client)
+            monkeypatch.setattr(
+                gateway,
+                "SERVICES",
+                {
+                    "auth": "https://auth.example",
+                    "converter": "https://converter.example",
+                    "library": "https://library.example",
+                },
+            )
+            first = await gateway.detailed_health_check()
+            second = await gateway.detailed_health_check()
+            return first, second
+
+    first, second = asyncio.run(run())
+    assert "HTTP 429" in first.dependencies["converter"]
+    assert second.status == "healthy"
+    assert calls["n"] == 6
+
+
 def test_detailed_health_probes_again_after_the_cache_window(monkeypatch):
     calls = {"n": 0}
 

@@ -288,14 +288,23 @@ async def forward_request(
 
 # One slow dependency must not hold the whole gateway health response open.
 HEALTH_PROBE_TIMEOUT = 5.0
-# Render calls this service's health path every few seconds. Reusing a probe
-# keeps that from turning into a request to the converter on every check.
-# 20s is long enough to ride out a wake-up burst and short enough that a
-# real outage still shows up on the next look.
+# A normal result can be reused briefly. Render may call /health every few
+# seconds; this stops that from becoming a downstream call every time.
 HEALTH_PROBE_CACHE_SECONDS = 20.0
+# A 429 is different. Render's hibernate-rate-limited penalty, and Cloudflare
+# in front of the public URL, keep answering 429 to a caller that tries again
+# too soon. 20s is inside that window, so the gateway stayed degraded for
+# minutes while a direct call already returned 200. One wake-up, then be quiet
+# long enough for the free instance to finish booting (~1 minute) before the
+# single retry. Applies to auth, library, and the converter.
+RATE_LIMIT_PROBE_BACKOFF_SECONDS = 90.0
+# /health must answer inside Render's 5s health-check limit. Probes run
+# together and this request does not wait longer than this.
+HEALTH_PROBE_BUDGET_SECONDS = 4.0
 # base URL -> (monotonic time, probe result)
 _health_probe_cache: Dict[str, Tuple[float, str]] = {}
-# One in-flight probe per process. Parallel /health calls must not stampede.
+# base URL -> in-flight probe. Callers share it so they do not stampede.
+_health_probe_inflight: Dict[str, "asyncio.Task[str]"] = {}
 _health_probe_lock = asyncio.Lock()
 
 
@@ -330,6 +339,19 @@ def describe_probe_http(path: str, response: httpx.Response) -> str:
 def clear_health_probe_cache() -> None:
     """Drop cached probes. Tests call this so one case cannot satisfy the next."""
     _health_probe_cache.clear()
+    _health_probe_inflight.clear()
+
+
+def probe_cache_ttl(result: str) -> float:
+    """Seconds to wait before probing this result again.
+
+    Any HTTP 429 uses the long backoff. That covers Render's
+    ``hibernate-rate-limited`` response and a later 429 from Cloudflare that
+    no longer carries the routing header. Other results use the short cache.
+    """
+    if "HTTP 429" in result:
+        return RATE_LIMIT_PROBE_BACKOFF_SECONDS
+    return HEALTH_PROBE_CACHE_SECONDS
 
 
 def _cached_probe_result(base: str) -> Optional[str]:
@@ -337,7 +359,7 @@ def _cached_probe_result(base: str) -> Optional[str]:
     if not cached:
         return None
     probed_at, result = cached
-    if time.monotonic() - probed_at >= HEALTH_PROBE_CACHE_SECONDS:
+    if time.monotonic() - probed_at >= probe_cache_ttl(result):
         return None
     return result
 
@@ -392,15 +414,26 @@ async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = 
     return f"{kind}:{'; '.join(attempts)}"
 
 
-async def cached_probe_service(service_url: str) -> str:
-    """Probe once, then reuse that result for ``HEALTH_PROBE_CACHE_SECONDS``.
+async def _probe_and_store(base: str) -> str:
+    """Run one probe and remember it. The caller must not cancel this task."""
+    try:
+        result = await probe_service(base)
+    except Exception as exc:
+        # A cancelled or failed probe must not be cached as a 429, or the
+        # backoff would hide a service that is already up.
+        result = f"unavailable:{type(exc).__name__}"
+    if base:
+        _health_probe_cache[base] = (time.monotonic(), result)
+    return result
 
-    Render's HTTP health check calls this process every few seconds. When
-    that path is ``/health``, each call used to request the converter's
-    public URL. Those calls all share the gateway's outbound address. On a
-    free service Render rate-limits that address, so the gateway sees 429
-    while a browser still gets 200. Reusing the last probe, and sharing one
-    in-flight probe across overlapping ``/health`` calls, stops that burst.
+
+async def cached_probe_service(service_url: str) -> str:
+    """Return a recent probe, or start one and share it with other callers.
+
+    A 200 is reused for ``HEALTH_PROBE_CACHE_SECONDS``. A 429 is reused for
+    ``RATE_LIMIT_PROBE_BACKOFF_SECONDS`` so auth, library, and the converter
+    are each woken once and then left alone until the free-tier penalty ends.
+    Overlapping ``/health`` calls await the same in-flight probe.
     """
     base = normalize_service_base_url(service_url)
     cached = _cached_probe_result(base)
@@ -411,10 +444,12 @@ async def cached_probe_service(service_url: str) -> str:
         cached = _cached_probe_result(base)
         if cached is not None:
             return cached
-        result = await probe_service(base)
-        if base:
-            _health_probe_cache[base] = (time.monotonic(), result)
-        return result
+        task = _health_probe_inflight.get(base)
+        if task is None or task.done():
+            task = asyncio.create_task(_probe_and_store(base))
+            if base:
+                _health_probe_inflight[base] = task
+    return await task
 
 
 # Routes
@@ -436,11 +471,24 @@ async def detailed_health_check():
     Overall ``status`` stays ``healthy`` or ``degraded``. Each dependency is
     ``healthy``, or ``unhealthy`` / ``unavailable`` plus the status code or
     exception type from the probe.
+
+    The three probes run together. This response waits at most
+    ``HEALTH_PROBE_BUDGET_SECONDS`` so a slow 429 cannot blow Render's 5s
+    health-check limit and restart the gateway. The probe itself keeps
+    running and fills the cache for the next call.
     """
     service_status = {}
 
-    for service_name, service_url in SERVICES.items():
-        result = await cached_probe_service(service_url)
+    async def one(service_name: str, service_url: str):
+        task = asyncio.create_task(cached_probe_service(service_url))
+        try:
+            # shield: hitting the budget must not cancel the probe. Cancelling
+            # it would miss the cache write and the next call would try again
+            # immediately, which is what keeps a 429 alive.
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=HEALTH_PROBE_BUDGET_SECONDS)
+        except asyncio.TimeoutError:
+            cached = _cached_probe_result(normalize_service_base_url(service_url))
+            result = cached if cached is not None else "unavailable:ProbeTimeout"
         if result != "healthy":
             logger.warning(
                 "Health probe for %s (%s) returned %s",
@@ -448,6 +496,11 @@ async def detailed_health_check():
                 service_url,
                 result,
             )
+        return service_name, result
+
+    for service_name, result in await asyncio.gather(
+        *(one(name, url) for name, url in SERVICES.items())
+    ):
         service_status[service_name] = result
 
     all_healthy = all(status == "healthy" for status in service_status.values())
