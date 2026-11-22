@@ -20,11 +20,10 @@ services:
         sync: false
       - key: AUTH_SERVICE_URL
         value: https://pdf-converter-auth-service.onrender.com
-      # A value already saved in the Render dashboard wins over this file.
-      # A manual deploy does not clear it. The health JSON names the host
-      # that was actually called.
+      # The Docker service with Tesseract. It has no /health route; GET / is 200.
+      # pdf-epub-converter-api is the older Python service and is not this target.
       - key: CONVERTER_SERVICE_URL
-        value: https://pdf-epub-converter-api.onrender.com
+        value: https://pdf-epub-scan.onrender.com
       - key: LIBRARY_SERVICE_URL
         value: https://pdf-converter-library-service.onrender.com
       - key: PORT

@@ -147,7 +147,7 @@ JWT_SECRET=$(openssl rand -hex 32)
    ```
    JWT_SECRET=your-jwt-secret
    AUTH_SERVICE_URL=https://pdf-auth-service.onrender.com
-   CONVERTER_SERVICE_URL=https://pdf-epub-converter-api.onrender.com
+   CONVERTER_SERVICE_URL=https://pdf-epub-scan.onrender.com
    LIBRARY_SERVICE_URL=https://pdf-library-service.onrender.com
    FRONTEND_URL=https://w1neskin.github.io/pdf-epub-converter
    PORT=8080
@@ -240,9 +240,8 @@ curl https://pdf-api-gateway.onrender.com/health
 # Individual service health
 curl https://pdf-auth-service.onrender.com/health
 curl https://pdf-library-service.onrender.com/health
-# Converter keeps `/` for Render and `/health` for the gateway.
-curl https://pdf-epub-converter-api.onrender.com/
-curl https://pdf-epub-converter-api.onrender.com/health
+# Gateway converter target. Scan has no /health route; GET / returns 200.
+curl https://pdf-epub-scan.onrender.com/
 ```
 
 ### Database Monitoring

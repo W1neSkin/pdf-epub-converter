@@ -408,26 +408,39 @@ def _cached_probe_result(base: str) -> Optional[str]:
     return result
 
 
-async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = None) -> str:
+# pdf-epub-scan serves GET / and does not implement GET /health.
+DEFAULT_PROBE_PATHS = ("/health", "/")
+CONVERTER_PROBE_PATHS = ("/",)
+
+
+def probe_paths_for(service_name: str) -> tuple:
+    """Paths to try, in order. The converter is scan, so it is only ``/``."""
+    if service_name == "converter":
+        return CONVERTER_PROBE_PATHS
+    return DEFAULT_PROBE_PATHS
+
+
+async def probe_service(
+    service_url: str,
+    client: Optional[httpx.AsyncClient] = None,
+    paths: tuple = DEFAULT_PROBE_PATHS,
+) -> str:
     """Return ``healthy`` or a diagnosable ``unhealthy`` / ``unavailable`` string.
 
-    ``GET /health`` is the shared check (auth, library, and the converter).
-    A 404 or a 5xx falls back to ``GET /``: an older converter only implements
-    ``/``, and a cold start often answers 502/503 on the first try.
+    Auth and library are checked at ``GET /health``, then ``GET /`` on a 404
+    or a 5xx. The converter is pdf-epub-scan, which has no ``/health`` route.
+    Its probe is ``GET /`` only, the path that returns 200. Asking for
+    ``/health`` there is a 404 from the app, or a 429 from Render's edge
+    before the app, and either result hides a service that is up.
 
-    A 429 does not fall back. Render's free tier returns 429 for the caller,
-    not for one path (``hibernate-rate-limited`` while the instance wakes, or
-    the lower inbound limit once that caller has sent too many requests).
-    ``GET /`` from the same caller gets the same 429, and the extra request
-    is what keeps the limit open. Direct calls from another address can still
-    be 200. User-facing proxy calls already wait 6 seconds between hibernate
-    retries. This probe must not fire a second request immediately.
+    A 429 does not fall back to another path. Render's free tier returns 429
+    for the caller, not for one path. A second request keeps that penalty
+    open. Direct calls from another address can still be 200.
 
     Failure strings keep the old word and append what failed, including the
-    host from the service URL. That host is the env value, which is not
-    always the URL a person curls by hand. For example
-    ``unhealthy:GET pdf-epub-scan.onrender.com/health HTTP 429 hibernate-rate-limited``
-    or ``unhealthy:GET converter.example/health HTTP 502; GET converter.example/ HTTP 503``.
+    host. For example
+    ``unhealthy:GET pdf-epub-scan.onrender.com/ HTTP 429 hibernate-rate-limited``
+    or ``unhealthy:GET auth.example/health HTTP 502; GET auth.example/ HTTP 503``.
     """
     base = normalize_service_base_url(service_url)
     if not base:
@@ -439,7 +452,7 @@ async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = 
     # Host only, so the health JSON shows which URL was called.
     host = base.split("://", 1)[-1]
 
-    for path in ("/health", "/"):
+    for path in paths:
         label = f"{host}{path}"
         try:
             response = await http.get(f"{base}{path}", timeout=HEALTH_PROBE_TIMEOUT)
@@ -462,10 +475,10 @@ async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = 
     return f"{kind}:{'; '.join(attempts)}"
 
 
-async def _probe_and_store(base: str) -> str:
+async def _probe_and_store(base: str, paths: tuple) -> str:
     """Run one probe and remember it. The caller must not cancel this task."""
     try:
-        result = await probe_service(base)
+        result = await probe_service(base, paths=paths)
     except Exception as exc:
         # A cancelled or failed probe must not be cached as a 429, or the
         # backoff would hide a service that is already up.
@@ -475,7 +488,10 @@ async def _probe_and_store(base: str) -> str:
     return result
 
 
-async def cached_probe_service(service_url: str) -> str:
+async def cached_probe_service(
+    service_url: str,
+    paths: tuple = DEFAULT_PROBE_PATHS,
+) -> str:
     """Return a recent probe, or start one and share it with other callers.
 
     A 200 is reused for ``HEALTH_PROBE_CACHE_SECONDS``. A 429 is reused for
@@ -494,7 +510,7 @@ async def cached_probe_service(service_url: str) -> str:
             return cached
         task = _health_probe_inflight.get(base)
         if task is None or task.done():
-            task = asyncio.create_task(_probe_and_store(base))
+            task = asyncio.create_task(_probe_and_store(base, paths))
             if base:
                 _health_probe_inflight[base] = task
     return await task
@@ -528,7 +544,9 @@ async def detailed_health_check():
     service_status = {}
 
     async def one(service_name: str, service_url: str):
-        task = asyncio.create_task(cached_probe_service(service_url))
+        task = asyncio.create_task(
+            cached_probe_service(service_url, probe_paths_for(service_name))
+        )
         try:
             # shield: hitting the budget must not cancel the probe. Cancelling
             # it would miss the cache write and the next call would try again
@@ -620,11 +638,11 @@ async def library_proxy(path: str, request: Request, user: Dict[str, Any] = Depe
     """Proxy requests to library service (auth required)"""
     return await forward_request("library", f"/library/{path}", request, user)
 
-# Converter service health check. `/` on the converter stays the Render probe.
+# pdf-epub-scan has no /health route. GET / is the check that returns 200.
 @app.get("/converter/health")
 async def converter_health(request: Request):
-    """Proxy the converter's `/health` check (same path as auth and library)."""
-    return await forward_request("converter", "/health", request)
+    """Proxy the converter's liveness check."""
+    return await forward_request("converter", "/", request)
 
 # Error handlers
 @app.exception_handler(HTTPException)

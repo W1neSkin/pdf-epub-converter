@@ -118,50 +118,40 @@ JWT_SECRET=your-jwt-secret-here
 {"status":"degraded","dependencies":{"auth":"healthy","converter":"unhealthy:GET /health HTTP 502; GET / HTTP 503","library":"healthy"}}
 ```
 
-The text after `unhealthy:` or `unavailable:` is the HTTP status or exception type. The gateway probes `GET /health`, then `GET /` when that call is a 404, a 5xx, or a connection error. A trailing slash on the service URL is ignored. A 429 is not followed by a second request.
+The text after `unhealthy:` or `unavailable:` is the HTTP status or exception type, and it includes the host. Auth and library are probed at `GET /health`, then `GET /` on a 404 or a 5xx. The converter is `pdf-epub-scan`, which has no `/health` route, so the gateway probes `GET /` only. A trailing slash on the service URL is ignored. A 429 is not followed by a second request.
 
 #### **Problem**: Converter is HTTP 429 from the gateway and HTTP 200 from outside
 ```json
-{"status":"degraded","dependencies":{"auth":"healthy","converter":"unhealthy:GET pdf-epub-scan.onrender.com/health HTTP 429 hibernate-rate-limited","library":"healthy"}}
+{"status":"degraded","dependencies":{"auth":"healthy","converter":"unhealthy:GET pdf-epub-scan.onrender.com/ HTTP 429 hibernate-rate-limited","library":"healthy"}}
 ```
 
-Read the host in that string. It is the gateway's `CONVERTER_SERVICE_URL`, not whichever host you curled by hand. On 2026-11-22 the running gateway called `pdf-epub-scan.onrender.com`. A direct check of `pdf-epub-converter-api.onrender.com` returned 200 at the same time, because that is a different service. The blueprint file says `pdf-epub-converter-api`, but a manual deploy does not replace an env var already saved on the service.
+The gateway's converter is `https://pdf-epub-scan.onrender.com`. That is the Docker service with Tesseract. `pdf-epub-converter-api` is the older Python service and is not the gateway target. Scan is up when `GET /` returns 200. It has no `/health` route, so the gateway probes `GET /` only.
 
-`pdf-epub-scan` is up when `GET /` returns 200. It has no `/health` route (the app returns 404). Render's edge still answers the gateway's address with `429 hibernate-rate-limited` for several minutes after the app is serving other callers. A retry at 90 seconds landed inside that penalty and started the wait over, which is why one quiet minute was not enough. Cloudflare separately answers some proxied calls with HTTP 429, `cf-mitigated: challenge`, and a "Just a moment..." page that names `pdf-epub-scan.onrender.com`. That happens when the gateway forwards `CF-Ray` and `CF-Connecting-IP` from the incoming request to the next Cloudflare host.
+Render's edge can still answer the gateway's address with `429 hibernate-rate-limited` for several minutes after scan is already serving other callers. A 429 is kept for 3 minutes so the next probe is not inside that penalty. Cloudflare answers some proxied calls with HTTP 429, `cf-mitigated: challenge`, and a "Just a moment..." page when `CF-Ray` and `CF-Connecting-IP` are forwarded. The gateway drops those headers.
 
-#### **What to set on Render (do this in the dashboard; a deploy does not change it)**
-Gateway service `srv-d1h8ovqli9vc73bg295g`, Environment:
-
+#### **Gateway env var**
 ```bash
-CONVERTER_SERVICE_URL=https://pdf-epub-converter-api.onrender.com
+CONVERTER_SERVICE_URL=https://pdf-epub-scan.onrender.com
 ```
+No trailing slash. A value already saved in the Render dashboard is what the running process uses. A manual deploy does not replace it.
 
-No trailing slash. Save, then redeploy the gateway so the process reads it. Use `pdf-epub-scan.onrender.com` only when proxied conversions should hit the Docker service that has Tesseract. The website already calls that host directly.
-
-Free web services cannot receive Render private-network traffic, so an internal hostname will not work until the converter is on a paid plan.
-
-#### **What the code does**
-The gateway does not forward Cloudflare edge headers, and it does not send `GET /` after a 429. A normal probe is reused for 20 seconds. A 429 is reused for 3 minutes so the retry is not inside the penalty. `/health` names the host it called.
-
-#### **How to verify after the env change and the deploy**
+#### **How to verify after deploy**
 ```bash
 curl -sS https://pdf-converter-api-gateway.onrender.com/health
-curl -sS https://pdf-epub-converter-api.onrender.com/health
 curl -sS https://pdf-epub-scan.onrender.com/
 curl -sS -D- https://pdf-converter-api-gateway.onrender.com/api/public/status/00000000-0000-0000-0000-000000000000
 ```
-The gateway dependency for `converter` should be `healthy`, or it should name `pdf-epub-converter-api.onrender.com` if you set that URL. The proxied status call should be JSON `Conversion not found`, not an HTML challenge page. If it still says 429, wait 3 minutes and curl `/health` once. Do not curl it in a loop during that wait.
+`converter` should be `healthy`. The proxied status call should be JSON `Conversion not found`, not an HTML challenge page. If the gateway still says 429, wait 3 minutes and curl `/health` once. Do not curl it in a loop during that wait. Compare scan with `GET /`, not `pdf-epub-converter-api` `/health`.
 
 #### **Solution**: Update Service URLs
 ```bash
 # API Gateway environment variables
 AUTH_SERVICE_URL=https://pdf-converter-auth-service.onrender.com
-CONVERTER_SERVICE_URL=https://pdf-epub-converter-api.onrender.com  
+CONVERTER_SERVICE_URL=https://pdf-epub-scan.onrender.com
 LIBRARY_SERVICE_URL=https://pdf-converter-library-service.onrender.com
 
-# Converter answers both paths. Render uses `/`. The gateway uses `/health`.
-curl https://pdf-epub-converter-api.onrender.com/
-curl https://pdf-epub-converter-api.onrender.com/health
+# The gateway calls scan's GET /. That service has no /health route.
+curl https://pdf-epub-scan.onrender.com/
 ```
 
 ## 📱 **Frontend Issues**

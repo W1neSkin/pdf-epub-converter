@@ -47,7 +47,7 @@ def _probe(url, handler):
 
 
 def test_converter_root_and_health_both_report_healthy():
-    """Render probes ``/``. The gateway probes ``/health``. Both must succeed."""
+    """This Python app answers both ``/`` and ``/health``. Scan, which the gateway calls, only answers ``/``."""
     client = TestClient(converter_app.app)
 
     root = client.get("/")
@@ -153,6 +153,24 @@ def test_probe_reports_exception_type_and_still_tries_root():
     )
 
 
+def test_converter_health_probes_the_root_scan_serves(monkeypatch):
+    """pdf-epub-scan has no /health. GET / is 200 and is the only probe."""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.host, request.url.path))
+        if request.url.host == "converter.example" and request.url.path == "/health":
+            return httpx.Response(404)
+        return httpx.Response(200, json={"status": "healthy"})
+
+    result = _gateway_health(monkeypatch, handler)
+    assert result.status == "healthy"
+    assert result.dependencies["converter"] == "healthy"
+    assert ("converter.example", "/") in seen
+    assert ("converter.example", "/health") not in seen
+    assert ("auth.example", "/health") in seen
+
+
 def test_probe_stops_after_healthy_health_path():
     seen = []
 
@@ -204,8 +222,10 @@ def test_gateway_health_stays_degraded_and_names_the_failure(monkeypatch):
     assert result.service_name == "api-gateway"
     assert result.dependencies["auth"] == "healthy"
     assert result.dependencies["library"] == "healthy"
-    assert result.dependencies["converter"] == "unhealthy:GET converter.example/health HTTP 429"
-    assert ("converter.example", "/") not in seen
+    assert result.dependencies["converter"] == "unhealthy:GET converter.example/ HTTP 429"
+    # Scan is probed at `/` only. A missing `/health` must not be requested.
+    assert ("converter.example", "/health") not in seen
+    assert ("converter.example", "/") in seen
 
 
 def test_detailed_health_reuses_a_recent_probe(monkeypatch):
@@ -316,11 +336,15 @@ def test_rate_limit_is_not_retried_on_the_short_cache_window(monkeypatch):
     first, second = asyncio.run(run())
     assert first.status == "degraded"
     assert second.status == "degraded"
-    for name in ("auth", "converter", "library"):
+    for name in ("auth", "library"):
         assert first.dependencies[name] == (
             f"unhealthy:GET {name}.example/health HTTP 429 hibernate-rate-limited"
         )
         assert second.dependencies[name] == first.dependencies[name]
+    assert first.dependencies["converter"] == (
+        "unhealthy:GET converter.example/ HTTP 429 hibernate-rate-limited"
+    )
+    assert second.dependencies["converter"] == first.dependencies["converter"]
     # One request per service. The second /health is served from the backoff.
     assert calls["n"] == 3
 
