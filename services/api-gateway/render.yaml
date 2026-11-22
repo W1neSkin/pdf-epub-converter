@@ -20,6 +20,9 @@ services:
         sync: false
       - key: AUTH_SERVICE_URL
         value: https://pdf-converter-auth-service.onrender.com
+      # A value already saved in the Render dashboard wins over this file.
+      # A manual deploy does not clear it. The health JSON names the host
+      # that was actually called.
       - key: CONVERTER_SERVICE_URL
         value: https://pdf-epub-converter-api.onrender.com
       - key: LIBRARY_SERVICE_URL

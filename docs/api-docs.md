@@ -132,7 +132,7 @@ GET /health
 
 `status` is `healthy` when every dependency returns HTTP 200, otherwise `degraded`.
 
-The gateway calls `GET /health` on each service, then `GET /` if that call is a 404, a 5xx, or a connection error. A 429 is reported as-is and is not followed by a second request. A normal result is reused for 20 seconds. A 429 is reused for 90 seconds so a wake-up is not retried while Render or Cloudflare is still answering that caller with 429. The three probes run together and `/health` answers within 4 seconds. A trailing slash on the service URL is removed first. Failure values keep `unhealthy` or `unavailable` and append the status code, `x-render-routing` when Render set it, or the exception type:
+The gateway calls `GET /health` on each service, then `GET /` if that call is a 404, a 5xx, or a connection error. A 429 is reported as-is and is not followed by a second request. A normal result is reused for 20 seconds. A 429 is reused for 3 minutes. The failure text includes the host from that service's URL, which is the env var the process is using. The three probes run together and `/health` answers within 4 seconds. A trailing slash on the service URL is removed first. Failure values keep `unhealthy` or `unavailable` and append the status code, `x-render-routing` when Render set it, or the exception type:
 
 ```json
 {
@@ -140,7 +140,7 @@ The gateway calls `GET /health` on each service, then `GET /` if that call is a 
   "status": "degraded",
   "dependencies": {
     "auth": "healthy",
-    "converter": "unhealthy:GET /health HTTP 429 hibernate-rate-limited",
+    "converter": "unhealthy:GET pdf-epub-scan.onrender.com/health HTTP 429 hibernate-rate-limited",
     "library": "healthy"
   }
 }

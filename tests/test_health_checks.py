@@ -109,7 +109,7 @@ def test_probe_does_not_follow_a_rate_limit():
         return httpx.Response(429, headers={"x-render-routing": "hibernate-rate-limited"})
 
     status = _probe("https://converter.example/", handler)
-    assert status == "unhealthy:GET /health HTTP 429 hibernate-rate-limited"
+    assert status == "unhealthy:GET converter.example/health HTTP 429 hibernate-rate-limited"
     assert seen == ["/health"]
 
 
@@ -120,7 +120,7 @@ def test_probe_marks_an_application_429():
         return httpx.Response(429, headers={"x-render-origin-server": "uvicorn"})
 
     status = _probe("https://converter.example", handler)
-    assert status == "unhealthy:GET /health HTTP 429 from-app"
+    assert status == "unhealthy:GET converter.example/health HTTP 429 from-app"
 
 
 def test_probe_reports_both_status_codes_when_fallback_fails():
@@ -130,7 +130,9 @@ def test_probe_reports_both_status_codes_when_fallback_fails():
         return httpx.Response(503)
 
     status = _probe("https://converter.example", handler)
-    assert status == "unhealthy:GET /health HTTP 502; GET / HTTP 503"
+    assert status == (
+        "unhealthy:GET converter.example/health HTTP 502; GET converter.example/ HTTP 503"
+    )
 
 
 def test_probe_reports_exception_type_and_still_tries_root():
@@ -145,7 +147,10 @@ def test_probe_reports_exception_type_and_still_tries_root():
         raise httpx.ConnectError("refused")
 
     status = _probe("https://converter.example", both_fail)
-    assert status == "unavailable:GET /health ConnectError; GET / ConnectError"
+    assert status == (
+        "unavailable:GET converter.example/health ConnectError; "
+        "GET converter.example/ ConnectError"
+    )
 
 
 def test_probe_stops_after_healthy_health_path():
@@ -199,7 +204,7 @@ def test_gateway_health_stays_degraded_and_names_the_failure(monkeypatch):
     assert result.service_name == "api-gateway"
     assert result.dependencies["auth"] == "healthy"
     assert result.dependencies["library"] == "healthy"
-    assert result.dependencies["converter"] == "unhealthy:GET /health HTTP 429"
+    assert result.dependencies["converter"] == "unhealthy:GET converter.example/health HTTP 429"
     assert ("converter.example", "/") not in seen
 
 
@@ -234,6 +239,34 @@ def test_detailed_health_reuses_a_recent_probe(monkeypatch):
     assert second.status == "healthy"
     # Three services once. The second check is served from the cache.
     assert calls["n"] == 3
+
+
+def test_outbound_headers_drop_cloudflare_replay_headers():
+    """Forwarding CF-Ray to the next onrender.com host triggers a challenge."""
+    headers = gateway.outbound_headers({
+        "Host": "pdf-converter-api-gateway.onrender.com",
+        "CF-Ray": "abc",
+        "CF-Connecting-IP": "1.2.3.4",
+        "X-Forwarded-For": "1.2.3.4",
+        "X-User-ID": "spoofed",
+        "Authorization": "Bearer t",
+        "User-Agent": "diag-health/1.0",
+        "Accept": "*/*",
+    })
+    lowered = {key.lower() for key in headers}
+    assert "host" not in lowered
+    assert "cf-ray" not in lowered
+    assert "cf-connecting-ip" not in lowered
+    assert "x-forwarded-for" not in lowered
+    assert "x-user-id" not in lowered
+    assert headers["Authorization"] == "Bearer t"
+    assert headers["User-Agent"] == "diag-health/1.0"
+    assert headers["Accept"] == "*/*"
+
+
+def test_outbound_headers_set_gateway_user_agent_when_missing():
+    headers = gateway.outbound_headers({"Accept": "*/*"})
+    assert headers["User-Agent"] == "pdf-converter-gateway"
 
 
 def test_probe_cache_ttl_backs_off_on_any_429():
@@ -284,7 +317,9 @@ def test_rate_limit_is_not_retried_on_the_short_cache_window(monkeypatch):
     assert first.status == "degraded"
     assert second.status == "degraded"
     for name in ("auth", "converter", "library"):
-        assert first.dependencies[name] == "unhealthy:GET /health HTTP 429 hibernate-rate-limited"
+        assert first.dependencies[name] == (
+            f"unhealthy:GET {name}.example/health HTTP 429 hibernate-rate-limited"
+        )
         assert second.dependencies[name] == first.dependencies[name]
     # One request per service. The second /health is served from the backoff.
     assert calls["n"] == 3

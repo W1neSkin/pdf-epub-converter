@@ -59,8 +59,13 @@ SERVICES = {
     "library": settings.LIBRARY_SERVICE_URL
 }
 
-# HTTP client for inter-service communication
-http_client = httpx.AsyncClient(timeout=settings.TIMEOUT)
+# HTTP client for inter-service communication.
+# A named agent instead of httpx's default. Health probes use this header.
+# Proxied calls keep the caller's User-Agent when one was sent.
+http_client = httpx.AsyncClient(
+    timeout=settings.TIMEOUT,
+    headers={"User-Agent": "pdf-converter-gateway"},
+)
 RENDER_WAKE_RETRY_ATTEMPTS = int(os.getenv("RENDER_WAKE_RETRY_ATTEMPTS", "30"))
 RENDER_WAKE_RETRY_DELAY_SECONDS = float(os.getenv("RENDER_WAKE_RETRY_DELAY_SECONDS", "6"))
 
@@ -110,6 +115,53 @@ async def send_with_render_retry(
         await asyncio.sleep(RENDER_WAKE_RETRY_DELAY_SECONDS)
 
     return response  # Unreachable, kept for type safety.
+
+
+# Headers Cloudflare adds on the way into the gateway. Forwarding them to
+# another onrender.com host makes that host's Cloudflare see a request that
+# claims it already passed Cloudflare, coming from a new address. It answers
+# with a managed challenge: HTTP 429, cf-mitigated: challenge, and the
+# "Just a moment..." HTML page. The app never sees the request.
+_EDGE_HEADERS = {
+    "host",
+    "content-length",
+    "connection",
+    "keep-alive",
+    "transfer-encoding",
+    "te",
+    "trailer",
+    "upgrade",
+    "proxy-connection",
+    "cf-ray",
+    "cf-connecting-ip",
+    "cf-ipcountry",
+    "cf-visitor",
+    "cf-ew-via",
+    "cdn-loop",
+    "true-client-ip",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-forwarded-port",
+    "forwarded",
+    "x-real-ip",
+    # Replaced below from the verified JWT, never from the client.
+    "x-user-id",
+    "x-user-email",
+}
+
+
+def outbound_headers(incoming) -> Dict[str, str]:
+    """Copy caller headers that are safe to send to the next service."""
+    headers = {
+        key: value
+        for key, value in incoming.items()
+        if key.lower() not in _EDGE_HEADERS
+    }
+    if not any(key.lower() == "user-agent" for key in headers):
+        headers["User-Agent"] = "pdf-converter-gateway"
+    return headers
+
 
 # Utility Functions
 def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
@@ -169,16 +221,9 @@ async def forward_request(
     service_url = normalize_service_base_url(service_url)
     target_url = f"{service_url}{path}"
     
-    # Prepare headers
-    headers = dict(request.headers)
-    # Remove host header to avoid conflicts
-    headers.pop("host", None)
-    # Never trust client-supplied user headers; only set them from a verified JWT.
-    headers.pop("x-user-id", None)
-    headers.pop("X-User-ID", None)
-    headers.pop("x-user-email", None)
-    headers.pop("X-User-Email", None)
-    
+    # Drop Cloudflare's edge headers. See outbound_headers.
+    headers = outbound_headers(request.headers)
+
     # Add user context if available
     if user:
         headers["X-User-ID"] = user["user_id"]
@@ -291,13 +336,12 @@ HEALTH_PROBE_TIMEOUT = 5.0
 # A normal result can be reused briefly. Render may call /health every few
 # seconds; this stops that from becoming a downstream call every time.
 HEALTH_PROBE_CACHE_SECONDS = 20.0
-# A 429 is different. Render's hibernate-rate-limited penalty, and Cloudflare
-# in front of the public URL, keep answering 429 to a caller that tries again
-# too soon. 20s is inside that window, so the gateway stayed degraded for
-# minutes while a direct call already returned 200. One wake-up, then be quiet
-# long enough for the free instance to finish booting (~1 minute) before the
-# single retry. Applies to auth, library, and the converter.
-RATE_LIMIT_PROBE_BACKOFF_SECONDS = 90.0
+# A 429 is different. Render's hibernate-rate-limited penalty stays on the
+# gateway's address for several minutes, not 90 seconds. On 2026-11-22 a
+# probe at 07:19 UTC was still 429 at 07:21, so the 90s retry asked again
+# inside the penalty and armed another wait. Three minutes is long enough
+# for that penalty to end before the single retry. Applies to every service.
+RATE_LIMIT_PROBE_BACKOFF_SECONDS = 180.0
 # /health must answer inside Render's 5s health-check limit. Probes run
 # together and this request does not wait longer than this.
 HEALTH_PROBE_BUDGET_SECONDS = 4.0
@@ -379,10 +423,11 @@ async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = 
     be 200. User-facing proxy calls already wait 6 seconds between hibernate
     retries. This probe must not fire a second request immediately.
 
-    Failure strings keep the old word and append what failed, for example
-    ``unhealthy:GET /health HTTP 429 hibernate-rate-limited`` or
-    ``unhealthy:GET /health HTTP 502; GET / HTTP 503`` or
-    ``unavailable:GET /health TimeoutException``.
+    Failure strings keep the old word and append what failed, including the
+    host from the service URL. That host is the env value, which is not
+    always the URL a person curls by hand. For example
+    ``unhealthy:GET pdf-epub-scan.onrender.com/health HTTP 429 hibernate-rate-limited``
+    or ``unhealthy:GET converter.example/health HTTP 502; GET converter.example/ HTTP 503``.
     """
     base = normalize_service_base_url(service_url)
     if not base:
@@ -391,21 +436,24 @@ async def probe_service(service_url: str, client: Optional[httpx.AsyncClient] = 
     http = client or http_client
     attempts = []
     saw_http = False
+    # Host only, so the health JSON shows which URL was called.
+    host = base.split("://", 1)[-1]
 
     for path in ("/health", "/"):
+        label = f"{host}{path}"
         try:
             response = await http.get(f"{base}{path}", timeout=HEALTH_PROBE_TIMEOUT)
         except Exception as exc:
             # Still try `/`. A timeout on `/health` during wake-up often
             # clears by the time the root path is requested.
-            attempts.append(f"GET {path} {type(exc).__name__}")
+            attempts.append(f"GET {label} {type(exc).__name__}")
             continue
 
         if response.status_code == 200:
             return "healthy"
 
         saw_http = True
-        attempts.append(describe_probe_http(path, response))
+        attempts.append(describe_probe_http(label, response))
         if response.status_code == 429:
             break
 
@@ -431,8 +479,8 @@ async def cached_probe_service(service_url: str) -> str:
     """Return a recent probe, or start one and share it with other callers.
 
     A 200 is reused for ``HEALTH_PROBE_CACHE_SECONDS``. A 429 is reused for
-    ``RATE_LIMIT_PROBE_BACKOFF_SECONDS`` so auth, library, and the converter
-    are each woken once and then left alone until the free-tier penalty ends.
+    ``RATE_LIMIT_PROBE_BACKOFF_SECONDS`` so a service is woken once and then
+    left alone until Render's penalty for this caller ends.
     Overlapping ``/health`` calls await the same in-flight probe.
     """
     base = normalize_service_base_url(service_url)
