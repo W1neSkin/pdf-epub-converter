@@ -131,8 +131,24 @@ The gateway, Render's health check of the gateway, and every proxied API call le
 
 Requests the gateway proxies to the converter (`/api/convert`, `/api/public/*`, `/api/status`, `/api/download`) use that same address, so they can receive the same 429 during the window. The website uploader does not. It calls `https://pdf-epub-scan.onrender.com` directly.
 
-#### **Solution**: Less traffic from the gateway, not a converter limiter change
-The gateway reuses each dependency probe for 20 seconds, and it does not send `GET /` after a 429. Render's own health check path for the gateway should be `/` (a local 200). `/health` remains the detailed check for operators. No Render dashboard setting has to change for the probe fix to apply. If the blueprint is synced, `services/api-gateway/render.yaml` sets the health check path to `/`.
+#### **Solution**: One wake-up, then a long quiet period
+The gateway does not send `GET /` after a 429. A normal probe is reused for 20 seconds. A 429 (`hibernate-rate-limited` or a later 429 with no routing header) is reused for 90 seconds, for auth, library, and the converter. Retrying sooner hits the same caller penalty and the gateway stays degraded after the service is already returning 200 to other addresses.
+
+`/health` probes the three services together and answers within 4 seconds. A slow 429 must not run past Render's 5 second health-check limit, or Render restarts the gateway and the restart wakes every service again.
+
+Free web services cannot receive Render private-network traffic, so the gateway cannot switch these calls to an internal hostname without a paid instance. No dashboard setting has to change. Render's own health check path for the gateway should stay `/` (a local 200). `/health` remains the detailed check.
+
+#### **How to verify after deploy**
+```bash
+curl -sS https://pdf-converter-api-gateway.onrender.com/health
+curl -sS https://pdf-epub-converter-api.onrender.com/health
+curl -sS https://pdf-converter-auth-service.onrender.com/health
+curl -sS https://pdf-converter-library-service.onrender.com/health
+```
+If the gateway shows `429` and the direct URLs show `200`, wait 90 seconds and curl the gateway `/health` once. It should report the services healthy. Curling it repeatedly during that wait must not keep the 429 in place. A proxied read should be the converter's JSON, not an HTML "Just a moment" page:
+```bash
+curl -sS -D- https://pdf-converter-api-gateway.onrender.com/api/public/status/00000000-0000-0000-0000-000000000000
+```
 
 #### **Solution**: Update Service URLs
 ```bash
